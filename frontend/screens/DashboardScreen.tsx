@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
+import { Video, ResizeMode } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
 import Card from '../components/Card';
@@ -8,6 +9,8 @@ import PillBadge from '../components/PillBadge';
 import { colors, spacing, fontSize, radii } from '../constants/theme';
 import { computeStreak, computeFocusHours, computeTodayScore, computeDailyProgress, toDateStr } from '../store/sessions';
 import type { SessionRecord } from '../App';
+
+const BG_VIDEO = require('../assets/13058496_1080_1920_60fps.mp4');
 
 const DAYS = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
 
@@ -25,6 +28,19 @@ function bestTimeLabel(sessions: SessionRecord[]): string | null {
 
 export default function DashboardScreen({ nav }: { nav: NavProps }) {
   const { sessions, user } = nav;
+  const videoRef   = useRef<Video>(null);
+  const [videoReady, setVideoReady] = useState(false);
+
+  // Seamless loop: seek to 0 when within 400 ms of the end
+  const handleStatus = (status: any) => {
+    if (
+      status.isLoaded &&
+      status.durationMillis &&
+      status.positionMillis >= status.durationMillis - 400
+    ) {
+      videoRef.current?.setPositionAsync(0);
+    }
+  };
   const name     = user.name !== 'User' ? user.name : (nav.params.name ?? 'User');
   const initial  = name.charAt(0).toUpperCase();
   const focusDay = `FOCUS ${DAYS[new Date().getDay()]}`;
@@ -40,7 +56,24 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
   const bestTime  = bestTimeLabel(sessions);
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+    <View style={styles.screen}>
+      {/* ── Full-screen video background ──────────────────────────────────── */}
+      <Video
+        ref={videoRef}
+        source={BG_VIDEO}
+        style={[StyleSheet.absoluteFill, { opacity: videoReady ? 1 : 0 }]}
+        resizeMode={ResizeMode.COVER}
+        isMuted
+        shouldPlay
+        onReadyForDisplay={() => setVideoReady(true)}
+        onPlaybackStatusUpdate={handleStatus}
+      />
+      {/* Solid fallback shown until the first video frame is ready */}
+      {!videoReady && <View style={styles.videoPlaceholder} />}
+      {/* Semi-transparent overlay so text remains readable */}
+      <View style={styles.overlay} />
+
+    <ScrollView style={styles.scrollArea} contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <View style={styles.header}>
@@ -132,12 +165,16 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
       </TouchableOpacity>
 
     </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen:     { flex: 1, backgroundColor: colors.bg },
-  container:  { padding: spacing.xl, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 52 },
+  screen:           { flex: 1, backgroundColor: '#1a1a2e' },
+  videoPlaceholder: { ...StyleSheet.absoluteFillObject, backgroundColor: '#1a1a2e' },
+  overlay:          { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.)' },
+  scrollArea:  { flex: 1 },
+  container:   { padding: spacing.xl, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 52 },
 
   header:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xl },
   focusDay:  { fontSize: fontSize.xs, fontWeight: '600', color: colors.muted, letterSpacing: 1.5, marginBottom: 2 },
