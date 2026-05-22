@@ -145,12 +145,16 @@ router.patch('/:id/end', async (req, res) => {
     const finalStatus = ['COMPLETED', 'ABANDONED'].includes(status) ? status : 'ABANDONED';
     const endTime     = endedAt ? new Date(endedAt) : new Date();
 
-    // Compute focus score server-side if not provided
+    // Focus score is computed server-side from authoritative sources only.
+    // Client-supplied focusScore / distractionCount values are ignored to preserve integrity.
     const actualMins       = timerState?.actualDuration || 0;
-    const distractionCount = req.body.distractionCount  || 0;
+    const distractionCount = await FocusLog.countDocuments({
+      sessionId: session._id,
+      event:     'APP_BLOCKED',
+    });
     const isPomo           = session.timerMode === 'POMODORO';
     const focusScore       = finalStatus === 'COMPLETED'
-      ? (req.body.focusScore ?? computeFocusScore(actualMins, session.timerConfig.plannedDuration, isPomo, distractionCount))
+      ? computeFocusScore(actualMins, session.timerConfig.plannedDuration, isPomo, distractionCount)
       : null;
 
     session.status     = finalStatus;

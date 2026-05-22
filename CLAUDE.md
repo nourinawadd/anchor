@@ -66,6 +66,7 @@ pomoBon = timerMode === 'POMODORO' ? 8 : 0
 penalty = min(24, distractionCount * 4)
 score = min(99, max(20, round(ratio * 80) + pomoBon - penalty + 12))
 ```
+`actualMins` comes from the request's `timerState.actualDuration`; `distractionCount` is counted from `FocusLog` (`APP_BLOCKED` events for the session). Any `focusScore` or `distractionCount` sent by the client is ignored — the score is always recomputed from authoritative sources.
 
 **Date handling**: All session/stats documents use `dateStr: YYYY-MM-DD` in local time (no UTC conversion). Frontend helpers: `toDateStr()`, `daysAgo()`, `fmtHHMM()` in `frontend/store/sessions.ts`.
 
