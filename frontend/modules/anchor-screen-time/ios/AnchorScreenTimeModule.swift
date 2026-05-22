@@ -5,36 +5,41 @@ import SwiftUI
 import UIKit
 
 private let kSelectionKey = "anchor.screenTime.familyActivitySelection"
-private let kStoreName = ManagedSettingsStore.Name("anchor.focus.shield")
+private let kStoreSuffix  = "anchor.focus.shield"
 
 @available(iOS 16.0, *)
-private final class SelectionStore {
-  static let shared = SelectionStore()
-
-  func load() -> FamilyActivitySelection? {
+private enum SelectionStore {
+  static func load() -> FamilyActivitySelection? {
     guard let data = UserDefaults.standard.data(forKey: kSelectionKey) else { return nil }
     return try? PropertyListDecoder().decode(FamilyActivitySelection.self, from: data)
   }
 
-  func save(_ selection: FamilyActivitySelection) {
-    let data = try? PropertyListEncoder().encode(selection)
-    UserDefaults.standard.set(data, forKey: kSelectionKey)
+  static func save(_ selection: FamilyActivitySelection) {
+    if let data = try? PropertyListEncoder().encode(selection) {
+      UserDefaults.standard.set(data, forKey: kSelectionKey)
+    }
   }
 
-  func clear() {
+  static func clear() {
     UserDefaults.standard.removeObject(forKey: kSelectionKey)
   }
 }
 
 @available(iOS 16.0, *)
+private final class SelectionBox: ObservableObject {
+  @Published var value: FamilyActivitySelection
+  init(_ initial: FamilyActivitySelection) { self.value = initial }
+}
+
+@available(iOS 16.0, *)
 private struct PickerHost: View {
-  @Binding var selection: FamilyActivitySelection
-  let onDone: () -> Void
+  @ObservedObject var box: SelectionBox
+  let onDone:   () -> Void
   let onCancel: () -> Void
 
   var body: some View {
     NavigationView {
-      FamilyActivityPicker(selection: $selection)
+      FamilyActivityPicker(selection: $box.value)
         .navigationTitle("Block Apps")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -46,47 +51,6 @@ private struct PickerHost: View {
           }
         }
     }
-  }
-}
-
-@available(iOS 16.0, *)
-private final class SelectionBox: ObservableObject {
-  @Published var value: FamilyActivitySelection
-
-  init(_ initial: FamilyActivitySelection) {
-    self.value = initial
-  }
-}
-
-@available(iOS 16.0, *)
-private final class PickerHostingController: UIHostingController<AnyView> {
-  var onFinished: ((FamilyActivitySelection?) -> Void)?
-  let box: SelectionBox
-
-  init(initial: FamilyActivitySelection) {
-    self.box = SelectionBox(initial)
-    super.init(rootView: AnyView(EmptyView()))
-
-    let box = self.box
-    self.rootView = AnyView(
-      PickerHost(
-        selection: Binding(get: { box.value }, set: { box.value = $0 }),
-        onDone: { [weak self] in
-          self?.dismiss(animated: true) {
-            self?.onFinished?(box.value)
-          }
-        },
-        onCancel: { [weak self] in
-          self?.dismiss(animated: true) {
-            self?.onFinished?(nil)
-          }
-        }
-      )
-    )
-  }
-
-  @MainActor required dynamic init?(coder aDecoder: NSCoder) {
-    fatalError("init(coder:) has not been implemented")
   }
 }
 
@@ -102,92 +66,105 @@ public class AnchorScreenTimeModule: Module {
     }
 
     AsyncFunction("requestAuthorization") { (promise: Promise) in
-      guard #available(iOS 16.0, *) else {
-        promise.resolve("unsupported")
-        return
-      }
-      Task { @MainActor in
-        do {
-          try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
-          promise.resolve(Self.statusString(AuthorizationCenter.shared.authorizationStatus))
-        } catch {
-          promise.reject("ERR_FAMILY_CONTROLS_AUTH", error.localizedDescription)
+      if #available(iOS 16.0, *) {
+        Task { @MainActor in
+          do {
+            try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
+            promise.resolve(Self.statusString(AuthorizationCenter.shared.authorizationStatus))
+          } catch {
+            promise.reject("ERR_FAMILY_CONTROLS_AUTH", error.localizedDescription)
+          }
         }
+      } else {
+        promise.resolve("unsupported")
       }
     }
 
     AsyncFunction("presentPicker") { (promise: Promise) in
-      guard #available(iOS 16.0, *) else {
-        promise.reject("ERR_UNSUPPORTED", "Family Controls requires iOS 16+")
-        return
-      }
-      Task { @MainActor in
-        guard let presenter = Self.topViewController() else {
-          promise.reject("ERR_NO_PRESENTER", "Could not find a view controller to present from")
-          return
-        }
-        let initial = SelectionStore.shared.load() ?? FamilyActivitySelection()
-        let host = PickerHostingController(initial: initial)
-        host.modalPresentationStyle = .formSheet
-        host.onFinished = { selection in
-          if let selection = selection {
-            SelectionStore.shared.save(selection)
-            promise.resolve(Self.summarize(selection))
-          } else {
-            promise.resolve(NSNull())
+      if #available(iOS 16.0, *) {
+        Task { @MainActor in
+          guard let presenter = Self.topViewController() else {
+            promise.reject("ERR_NO_PRESENTER", "No view controller to present from")
+            return
           }
+          let box = SelectionBox(SelectionStore.load() ?? FamilyActivitySelection())
+          var holder: UIHostingController<PickerHost>?
+          var resolved = false
+          let view = PickerHost(
+            box: box,
+            onDone: {
+              if resolved { return }
+              resolved = true
+              holder?.dismiss(animated: true) {
+                SelectionStore.save(box.value)
+                promise.resolve(Self.summarize(box.value))
+              }
+            },
+            onCancel: {
+              if resolved { return }
+              resolved = true
+              holder?.dismiss(animated: true) {
+                promise.resolve(NSNull())
+              }
+            }
+          )
+          let host = UIHostingController(rootView: view)
+          host.modalPresentationStyle = .formSheet
+          holder = host
+          presenter.present(host, animated: true)
         }
-        presenter.present(host, animated: true)
+      } else {
+        promise.reject("ERR_UNSUPPORTED", "Family Controls requires iOS 16+")
       }
     }
 
     AsyncFunction("getSelectionSummary") { () -> Any in
-      guard #available(iOS 16.0, *), let selection = SelectionStore.shared.load() else {
-        return NSNull()
+      if #available(iOS 16.0, *), let selection = SelectionStore.load() {
+        return Self.summarize(selection)
       }
-      return Self.summarize(selection)
+      return NSNull()
     }
 
     AsyncFunction("hasSelection") { () -> Bool in
-      guard #available(iOS 16.0, *), let selection = SelectionStore.shared.load() else {
-        return false
+      if #available(iOS 16.0, *), let selection = SelectionStore.load() {
+        return !selection.applicationTokens.isEmpty
+            || !selection.categoryTokens.isEmpty
+            || !selection.webDomainTokens.isEmpty
       }
-      return !selection.applicationTokens.isEmpty ||
-             !selection.categoryTokens.isEmpty ||
-             !selection.webDomainTokens.isEmpty
+      return false
     }
 
-    AsyncFunction("clearSelection") { () in
+    AsyncFunction("clearSelection") {
       if #available(iOS 16.0, *) {
-        SelectionStore.shared.clear()
+        SelectionStore.clear()
       }
     }
 
     AsyncFunction("applyShield") { (promise: Promise) in
-      guard #available(iOS 16.0, *) else {
+      if #available(iOS 16.0, *) {
+        guard AuthorizationCenter.shared.authorizationStatus == .approved else {
+          promise.reject("ERR_NOT_AUTHORIZED", "Screen Time authorization not approved")
+          return
+        }
+        guard let selection = SelectionStore.load() else {
+          promise.reject("ERR_NO_SELECTION", "No apps selected to block")
+          return
+        }
+        let store = ManagedSettingsStore(named: ManagedSettingsStore.Name(kStoreSuffix))
+        store.shield.applications = selection.applicationTokens.isEmpty ? nil : selection.applicationTokens
+        store.shield.applicationCategories = selection.categoryTokens.isEmpty
+          ? nil
+          : .specific(selection.categoryTokens, except: [])
+        store.shield.webDomains = selection.webDomainTokens.isEmpty ? nil : selection.webDomainTokens
+        promise.resolve(nil)
+      } else {
         promise.reject("ERR_UNSUPPORTED", "Family Controls requires iOS 16+")
-        return
       }
-      guard AuthorizationCenter.shared.authorizationStatus == .approved else {
-        promise.reject("ERR_NOT_AUTHORIZED", "Screen Time authorization is not approved")
-        return
-      }
-      guard let selection = SelectionStore.shared.load() else {
-        promise.reject("ERR_NO_SELECTION", "No apps have been selected to block")
-        return
-      }
-      let store = ManagedSettingsStore(named: kStoreName)
-      store.shield.applications = selection.applicationTokens.isEmpty ? nil : selection.applicationTokens
-      store.shield.applicationCategories = selection.categoryTokens.isEmpty
-        ? nil
-        : .specific(selection.categoryTokens)
-      store.shield.webDomains = selection.webDomainTokens.isEmpty ? nil : selection.webDomainTokens
-      promise.resolve(nil)
     }
 
-    AsyncFunction("clearShield") { () in
+    AsyncFunction("clearShield") {
       if #available(iOS 16.0, *) {
-        let store = ManagedSettingsStore(named: kStoreName)
+        let store = ManagedSettingsStore(named: ManagedSettingsStore.Name(kStoreSuffix))
         store.shield.applications = nil
         store.shield.applicationCategories = nil
         store.shield.webDomains = nil
@@ -207,7 +184,7 @@ public class AnchorScreenTimeModule: Module {
 
   @available(iOS 16.0, *)
   private static func summarize(_ selection: FamilyActivitySelection) -> [String: Int] {
-    return [
+    [
       "applicationCount": selection.applicationTokens.count,
       "categoryCount":    selection.categoryTokens.count,
       "webDomainCount":   selection.webDomainTokens.count,
@@ -216,10 +193,9 @@ public class AnchorScreenTimeModule: Module {
 
   @MainActor
   private static func topViewController(base: UIViewController? = nil) -> UIViewController? {
-    let root = base
-      ?? UIApplication.shared.connectedScenes
-        .compactMap { ($0 as? UIWindowScene)?.keyWindow }
-        .first?.rootViewController
+    let root = base ?? UIApplication.shared.connectedScenes
+      .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+      .first?.rootViewController
     if let nav = root as? UINavigationController {
       return topViewController(base: nav.visibleViewController)
     }

@@ -10,6 +10,8 @@ import SectionLabel from '../components/SectionLabel';
 import { colors, spacing, radii, fontSize } from '../constants/theme';
 import {
   isSupported as screenTimeSupported,
+  isNativeReady as screenTimeNativeReady,
+  getLoadError as screenTimeLoadError,
   getAuthorizationStatus,
   requestAuthorization,
   presentPicker,
@@ -18,7 +20,7 @@ import {
   summaryTotal,
   type ScreenTimeSelectionSummary,
   type ScreenTimeAuthStatus,
-} from '../../modules/anchor-screen-time/src';
+} from 'anchor-screen-time';
 
 const SESSION_TYPES = ['Study', 'Work', 'Custom'] as const;
 const DURATIONS = [15, 25, 30, 45, 60, 90];
@@ -48,7 +50,7 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
   const [stBusy,    setStBusy]      = useState(false);
 
   useEffect(() => {
-    if (!screenTimeSupported()) return;
+    if (!screenTimeNativeReady()) return;
     let alive = true;
     (async () => {
       try {
@@ -65,6 +67,13 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
 
   const configureScreenTime = async () => {
     if (!screenTimeSupported()) return;
+    if (!screenTimeNativeReady()) {
+      Alert.alert(
+        'Screen Time module not loaded',
+        `The native module failed to load:\n\n${screenTimeLoadError()?.message ?? 'unknown'}\n\nThis usually means the build didn't include the module. Try rebuilding.`,
+      );
+      return;
+    }
     setStBusy(true);
     try {
       let status = stStatus;

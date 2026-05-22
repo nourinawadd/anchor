@@ -17,7 +17,7 @@ import {
   hasSelection as screenTimeHasSelection,
   applyShield as applyScreenTimeShield,
   clearShield as clearScreenTimeShield,
-} from '../../modules/anchor-screen-time/src';
+} from 'anchor-screen-time';
 
 function fmt(secs: number) {
   const m = Math.floor(secs / 60).toString().padStart(2, '0');

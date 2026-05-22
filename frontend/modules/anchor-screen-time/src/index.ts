@@ -36,12 +36,27 @@ const noopModule: AnchorScreenTimeNativeModule = {
   clearShield:            async () => {},
 };
 
-const native: AnchorScreenTimeNativeModule =
-  Platform.OS === 'ios'
-    ? requireNativeModule<AnchorScreenTimeNativeModule>('AnchorScreenTime')
-    : noopModule;
+let nativeLoadError: Error | null = null;
 
-export const isSupported = (): boolean => Platform.OS === 'ios';
+function loadNative(): AnchorScreenTimeNativeModule {
+  if (Platform.OS !== 'ios') return noopModule;
+  try {
+    return requireNativeModule<AnchorScreenTimeNativeModule>('AnchorScreenTime');
+  } catch (err) {
+    nativeLoadError = err instanceof Error ? err : new Error(String(err));
+    console.warn(
+      '[anchor-screen-time] native module not available — shield will be a no-op.',
+      nativeLoadError.message,
+    );
+    return noopModule;
+  }
+}
+
+const native: AnchorScreenTimeNativeModule = loadNative();
+
+export const isSupported   = (): boolean => Platform.OS === 'ios';
+export const isNativeReady = (): boolean => Platform.OS === 'ios' && nativeLoadError === null;
+export const getLoadError  = (): Error | null => nativeLoadError;
 
 export const getAuthorizationStatus = () => native.getAuthorizationStatus();
 export const requestAuthorization   = () => native.requestAuthorization();
