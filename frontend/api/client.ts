@@ -3,10 +3,11 @@
 // Set EXPO_PUBLIC_API_URL in frontend/.env to override the dev URL (required for
 // physical phones — 10.0.2.2 only resolves from the Android emulator).
 
-const DEV_URL  = process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:5000/api';
+const ENV_URL  = process.env.EXPO_PUBLIC_API_URL;
+const DEV_URL  = 'http://10.0.2.2:5000/api';
 const PROD_URL = 'https://your-production-url/api';
 
-const BASE = __DEV__ ? DEV_URL : PROD_URL;
+const BASE = ENV_URL ?? (__DEV__ ? DEV_URL : PROD_URL);
 
 export async function apiFetch<T = unknown>(
   path: string,

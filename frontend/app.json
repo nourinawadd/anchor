@@ -14,22 +14,23 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.gradproject.anchor",
+      "bundleIdentifier": "dev.gradproject.anchor",
       "infoPlist": {
         "NFCReaderUsageDescription": "Anchor uses NFC to verify your physical presence at your focus location during sessions."
       },
-      "entitlements": {
-        "com.apple.developer.nfc.readersession.formats": ["NDEF"]
-      }
+      "buildNumber": "8"
     },
     "android": {
-      "package": "com.gradproject.anchor",
+      "package": "dev.gradproject.anchor",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.NFC"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -41,6 +42,12 @@
           "nfcPermission": "Anchor uses NFC to verify your physical presence at your focus location during sessions."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "2b6ca6cf-de44-4ab0-8476-faf6f23cd2a1"
+      }
+    },
+    "owner": "nourinawad"
   }
 }
