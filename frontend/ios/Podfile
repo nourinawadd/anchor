@@ -21,17 +21,6 @@ platform :ios, podfile_properties['ios.deploymentTarget'] || '15.1'
 prepare_react_native_project!
 
 target 'Anchor' do
-  # DIAGNOSTIC — remove once anchor-screen-time autolinking works on EAS
-  modules_path = File.expand_path('../modules', __dir__)
-  Pod::UI.puts "=== ANCHOR DIAGNOSTIC ==="
-  Pod::UI.puts "modules dir path: #{modules_path}"
-  Pod::UI.puts "modules dir exists: #{File.directory?(modules_path)}"
-  Pod::UI.puts "modules dir contents: #{Dir.entries(modules_path) rescue 'N/A'}"
-  Pod::UI.puts "anchor-screen-time dir contents: #{Dir.entries(File.join(modules_path, 'anchor-screen-time')) rescue 'N/A'}"
-  Pod::UI.puts "anchor-screen-time/ios contents: #{Dir.entries(File.join(modules_path, 'anchor-screen-time', 'ios')) rescue 'N/A'}"
-  Pod::UI.puts "expo-module.config.json exists: #{File.exist?(File.join(modules_path, 'anchor-screen-time', 'expo-module.config.json'))}"
-  Pod::UI.puts "=== END DIAGNOSTIC ==="
-
   use_expo_modules!
 
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
