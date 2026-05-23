@@ -83,3 +83,7 @@ JWT_SECRET=
 JWT_EXPIRES_IN=7d   # optional, defaults to 7d
 PORT=5000           # optional, defaults to 5000
 ```
+
+## Workflow
+
+After making any code/config changes, always end the response with **one** suggested commit message covering all changed files in a single commit (conventional-commits format with scope, e.g. `fix(ios): ...`, `feat(backend): ...`). Do not propose splitting into multiple commits — the user prefers a single combined commit.

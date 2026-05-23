@@ -28,7 +28,15 @@
       "Bash(echo \"exit:$?\")",
       "WebFetch(domain:expo.dev)",
       "Bash(git ls-tree *)",
-      "Bash(findstr /C:\"anchor\" /C:\"AnchorScreen\")"
+      "Bash(findstr /C:\"anchor\" /C:\"AnchorScreen\")",
+      "Bash(tar -tzf anchor-screen-time-0.1.0.tgz)",
+      "Bash(openssl dgst *)",
+      "Bash(rm -f scripts/setup-local-modules.js)",
+      "Bash(rmdir scripts *)",
+      "Bash(rm -f frontend-1.0.0.tgz)",
+      "Bash(rm -rf node_modules/anchor-screen-time)",
+      "Bash(ls scripts *)",
+      "Bash(npx --no-install expo-modules-autolinking resolve --platform ios --json)"
     ]
   }
 }

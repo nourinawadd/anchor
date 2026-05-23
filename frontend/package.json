@@ -6,8 +6,12 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web",
-    "postinstall": "node scripts/setup-local-modules.js"
+    "web": "expo start --web"
+  },
+  "expo": {
+    "autolinking": {
+      "searchPaths": ["./modules"]
+    }
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

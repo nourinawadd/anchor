@@ -19,7 +19,7 @@
         "NFCReaderUsageDescription": "Anchor uses NFC to verify your physical presence at your focus location during sessions.",
         "NSFamilyControlsUsageDescription": "Anchor uses Screen Time to shield distracting apps during your focus sessions."
       },
-      "buildNumber": "19",
+      "buildNumber": "20",
       "entitlements": {
         "com.apple.developer.family-controls": true
       }
@@ -55,11 +55,11 @@
         }
       ]
     ],
+    "owner": "anchorr",
     "extra": {
       "eas": {
-        "projectId": "2b6ca6cf-de44-4ab0-8476-faf6f23cd2a1"
+        "projectId": "7ecac53d-60ff-4b8b-88a0-7a5890fa51f3"
       }
-    },
-    "owner": "nourinawad"
+    }
   }
 }
