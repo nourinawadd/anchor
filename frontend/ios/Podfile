@@ -26,7 +26,7 @@ target 'Anchor' do
   # pinned here, it compiles regardless; the post_install hook below then injects
   # the module class into the generated ExpoModulesProvider.swift so the JS
   # `requireNativeModule('AnchorScreenTime')` call resolves at runtime.
-  pod 'AnchorScreenTime', :path => '../modules/anchor-screen-time'
+  pod 'AnchorScreenTime', :path => '../modules/anchor-screen-time/ios'
 
   use_expo_modules!
 
