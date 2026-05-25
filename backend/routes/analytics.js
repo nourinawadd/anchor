@@ -160,19 +160,7 @@ router.get('/ai-insight', async (req, res) => {
   }
 });
 
-// ─── PUT /api/analytics/ai-insight ───────────────────────────────────────────
-// Called by the Python ML service after each model run.
-router.put('/ai-insight', async (req, res) => {
-  try {
-    const insight = await AIInsight.findOneAndUpdate(
-      { userId: req.user._id },
-      { $set: { ...req.body, generatedAt: new Date() } },
-      { upsert: true, new: true },
-    );
-    res.json(insight);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
+// NOTE: PUT /api/analytics/ai-insight was removed. Insight generation is now
+// owned server-side by /api/ai/insights (see routes/ai.js); no external writer.
 
 export default router;

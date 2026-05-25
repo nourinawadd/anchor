@@ -3,6 +3,7 @@ import User from '../models/User.js';
 import NFCTag from '../models/NFCTag.js';
 import UserTag from '../models/UserTag.js';
 import auth from '../middleware/auth.js';
+import { assertObjectId } from '../utils/validation.js';
 
 const router = express.Router();
 
@@ -71,6 +72,8 @@ router.post('/nfc-tags', async (req, res) => {
 
 // ─── DELETE /api/user/nfc-tags/:userTagId ────────────────────────────────────
 router.delete('/nfc-tags/:userTagId', async (req, res) => {
+  if (!assertObjectId(req.params.userTagId, res)) return;
+
   const deleted = await UserTag.findOneAndDelete({
     _id:    req.params.userTagId,
     userId: req.user._id,

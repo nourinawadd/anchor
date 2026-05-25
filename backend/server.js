@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express  from 'express';
 import mongoose from 'mongoose';
 import cors     from 'cors';
+import helmet   from 'helmet';
 import './models/User.js';
 import './models/NFCTag.js';
 import './models/UserTag.js';
@@ -16,11 +17,30 @@ import analyticsRoutes from './routes/analytics.js';
 import errorHandler    from './middleware/errorHandler.js';
 import aiRoutes        from './routes/ai.js';
 
+// ─── Fail fast on misconfiguration ──────────────────────────────────────────
+// Better to crash on boot than to run with a weak/absent secret or open CORS.
+function assertEnv() {
+  const required = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'MONGO_URI', 'CORS_ORIGINS'];
+  const missing  = required.filter(key => !process.env[key]);
+  if (missing.length)
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  if (process.env.JWT_SECRET.length < 32)
+    throw new Error('JWT_SECRET must be at least 32 characters');
+}
+assertEnv();
+
 const app  = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
-app.use(express.json());
+// Trust the first proxy hop so express-rate-limit sees real client IPs.
+app.set('trust proxy', 1);
+
+app.use(helmet());
+app.use(cors({
+  origin:      process.env.CORS_ORIGINS.split(',').map(o => o.trim()),
+  credentials: false,
+}));
+app.use(express.json({ limit: '100kb' }));
 
 app.use('/api/auth',      authRoutes);
 app.use('/api/user',      userRoutes);

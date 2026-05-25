@@ -3,6 +3,7 @@ import Session from '../models/Session.js';
 import FocusLog from '../models/FocusLog.js';
 import Statistics from '../models/Statistics.js';
 import auth from '../middleware/auth.js';
+import { assertObjectId } from '../utils/validation.js';
 import { invalidateSuggestion } from '../services/aiSuggestionService.js';
 
 const router = express.Router();
@@ -135,6 +136,7 @@ router.post('/', async (req, res) => {
 // Called when the user ends a session (from ActiveSessionScreen confirmEnd).
 // Body: { status: 'COMPLETED'|'ABANDONED', timerState, focusScore?, endedAt?, nfcTagUid? }
 router.patch('/:id/end', async (req, res) => {
+  if (!assertObjectId(req.params.id, res)) return;
   try {
     const session = await Session.findOne({ _id: req.params.id, userId: req.user._id });
     if (!session) return res.status(404).json({ message: 'Session not found' });
@@ -158,7 +160,12 @@ router.patch('/:id/end', async (req, res) => {
       : null;
 
     session.status     = finalStatus;
-    session.timerState = timerState || {};
+    // Whitelist timerState fields — never assign the raw client object.
+    session.timerState = {
+      actualDuration:          timerState?.actualDuration          ?? 0,
+      pomodoroRoundsCompleted: timerState?.pomodoroRoundsCompleted ?? 0,
+      breaks:                  timerState?.breaks                  ?? 0,
+    };
     session.focusScore = focusScore;
     session.endedAt    = endTime;
     if (nfcTagUid) session.nfcTagUid = nfcTagUid;
@@ -203,6 +210,7 @@ router.patch('/:id/end', async (req, res) => {
 // Called by the native foreground service when an app block occurs, etc.
 // Body: { event, metadata? }
 router.post('/:id/log', async (req, res) => {
+  if (!assertObjectId(req.params.id, res)) return;
   try {
     const session = await Session.findOne({ _id: req.params.id, userId: req.user._id });
     if (!session) return res.status(404).json({ message: 'Session not found' });
@@ -225,6 +233,7 @@ router.post('/:id/log', async (req, res) => {
 // ─── GET /api/sessions/:id/logs ──────────────────────────────────────────────
 // All focus log events for a specific session.
 router.get('/:id/logs', async (req, res) => {
+  if (!assertObjectId(req.params.id, res)) return;
   try {
     const logs = await FocusLog
       .find({ sessionId: req.params.id, userId: req.user._id })
@@ -238,6 +247,7 @@ router.get('/:id/logs', async (req, res) => {
 // ─── DELETE /api/sessions/:id ─────────────────────────────────────────────────
 // Matches nav.deleteSession(id) — also cleans up focus logs.
 router.delete('/:id', async (req, res) => {
+  if (!assertObjectId(req.params.id, res)) return;
   try {
     const session = await Session.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
     if (!session) return res.status(404).json({ message: 'Session not found' });
