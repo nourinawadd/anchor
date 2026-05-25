@@ -21,10 +21,7 @@ import AIInsightsScreen from './screens/AIInsightsScreen';
 import ComingSoonScreen from './screens/ComingSoonScreen';
 import NFCSetupScreen from './screens/NFCSetupScreen';
 import Drawer from './components/Drawer';
-import { apiFetch } from './api/client';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const TOKEN_KEY = 'auth.token';
+import { apiFetch, loadTokens, logout as clearAuth, setOnAuthExpired } from './api/client';
 
 export type ScreenName =
   | 'SignUp' | 'Login' | 'Dashboard' | 'Profile' | 'Settings'
@@ -66,17 +63,19 @@ export default function App() {
   const [token,      setTokenState] = useState<string | null>(null);
   const [hydrated,   setHydrated]   = useState(false);
 
+  // Token persistence lives in api/client (it owns the access+refresh pair and
+  // the rotation logic). App only mirrors the access token into state to gate
+  // screens and re-trigger data fetches.
   const setToken = useCallback((t: string) => {
     setTokenState(t);
-    AsyncStorage.setItem(TOKEN_KEY, t).catch(console.error);
   }, []);
 
-  // Restore persisted token on app launch.
+  // Restore persisted tokens on app launch.
   useEffect(() => {
-    AsyncStorage.getItem(TOKEN_KEY)
-      .then(stored => {
-        if (stored) {
-          setTokenState(stored);
+    loadTokens()
+      .then(({ accessToken }) => {
+        if (accessToken) {
+          setTokenState(accessToken);
           setCurrent('Dashboard');
         }
       })
@@ -109,7 +108,7 @@ export default function App() {
   }, [fadeAnim]);
 
   const signOut = useCallback(() => {
-    AsyncStorage.removeItem(TOKEN_KEY).catch(console.error);
+    clearAuth().catch(console.error);   // revoke refresh token server-side + clear local
     setTokenState(null);
     setSessions([]);
     setUser(DEFAULT_USER);
@@ -118,6 +117,12 @@ export default function App() {
     setDrawerOpen(false);
     navigate('Login');
   }, [navigate]);
+
+  // When a refresh fails mid-session, the client gives up and calls this.
+  useEffect(() => {
+    setOnAuthExpired(signOut);
+    return () => setOnAuthExpired(null);
+  }, [signOut]);
 
   const refreshSessions = useCallback(() => {
     if (!token) return;

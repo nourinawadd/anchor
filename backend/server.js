@@ -10,6 +10,7 @@ import './models/Session.js';
 import './models/FocusLog.js';
 import './models/Statistics.js';
 import './models/AIInsight.js';
+import './models/RefreshToken.js';
 import authRoutes      from './routes/auth.js';
 import userRoutes      from './routes/user.js';
 import sessionRoutes   from './routes/sessions.js';

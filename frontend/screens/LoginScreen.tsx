@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
-import { apiFetch } from '../api/client';
+import { apiFetch, setTokens } from '../api/client';
 
 type Errors = { email?: string; password?: string; api?: string };
 
@@ -31,11 +31,14 @@ export default function LoginScreen({ nav }: { nav: NavProps }) {
     if (!validate() || loading) return;
     setLoading(true);
     try {
-      const { token, user } = await apiFetch<{ token: string; user: any }>(
+      const { accessToken, refreshToken, user } = await apiFetch<{
+        accessToken: string; refreshToken: string; user: any;
+      }>(
         '/auth/login', null,
         { method: 'POST', body: JSON.stringify({ email, password }) },
       );
-      nav.setToken(token);
+      await setTokens({ accessToken, refreshToken });
+      nav.setToken(accessToken);
       nav.updateUser({ name: user.name, email: user.email });
       nav.replace('Dashboard', { name: user.name, email: user.email });
     } catch (e: any) {
