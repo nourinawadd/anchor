@@ -19,6 +19,7 @@ import HistoryScreen from './screens/HistoryScreen';
 import AnalyticsScreen from './screens/AnalyticsScreen';
 import ComingSoonScreen from './screens/ComingSoonScreen';
 import Drawer from './components/Drawer';
+import { ThemeProvider } from './context/ThemeContext';
 import { apiFetch } from './api/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -171,8 +172,9 @@ export default function App() {
   if (!hydrated) return <View style={{ flex: 1, backgroundColor: '#fff' }} />;
 
   return (
+    <ThemeProvider dark={user.darkMode}>
     <View style={{ flex: 1 }}>
-      <StatusBar style={DARK_STATUS.includes(current) ? 'light' : 'dark'} />
+      <StatusBar style={DARK_STATUS.includes(current) || user.darkMode ? 'light' : 'dark'} />
 
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
         {current === 'SignUp'          && <SignUpScreen nav={nav} />}
@@ -199,5 +201,6 @@ export default function App() {
         />
       )}
     </View>
+    </ThemeProvider>
   );
 }

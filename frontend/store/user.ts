@@ -17,6 +17,8 @@ export type UserProfile = {
 
   // ── Preferences ───────────────────────────────────────────────────────────
   notificationsEnabled: boolean;
+  /** Global dark mode — inverts all screen colours except ActiveSession. */
+  darkMode: boolean;
 };
 
 export const DEFAULT_USER: UserProfile = {
@@ -27,6 +29,7 @@ export const DEFAULT_USER: UserProfile = {
   preferredDuration: 25,
   pomodoroEnabled: false,
   notificationsEnabled: true,
+  darkMode:             false,
 };
 
 // ─── Goal chip definitions (used by SettingsScreen) ───────────────────────────

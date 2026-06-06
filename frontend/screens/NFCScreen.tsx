@@ -1,14 +1,18 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   Animated, Easing, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
+import { ColorPalette } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 
 type Phase = 'scanning' | 'success' | 'error';
 
 export default function NFCScreen({ nav }: { nav: NavProps }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [phase, setPhase] = useState<Phase>('scanning');
   const [tagId, setTagId] = useState('');
 
@@ -151,8 +155,8 @@ export default function NFCScreen({ nav }: { nav: NavProps }) {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#f5f5f5', alignItems: 'center' },
+const makeStyles = (c: ColorPalette) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: c.bg, alignItems: 'center' },
   header: {
     alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center',
     paddingTop: Platform.OS === 'ios' ? 60 : 44,
@@ -160,8 +164,6 @@ const styles = StyleSheet.create({
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
   body: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
-
-  // ── Scanning ──
   ringContainer: {
     width: 220, height: 220,
     alignItems: 'center', justifyContent: 'center', marginBottom: 44,
@@ -169,37 +171,31 @@ const styles = StyleSheet.create({
   ring: {
     position: 'absolute',
     width: 170, height: 170, borderRadius: 85,
-    backgroundColor: '#111',
+    backgroundColor: c.ink,
   },
   centerCircle: {
     width: 108, height: 108, borderRadius: 54,
-    backgroundColor: '#111', alignItems: 'center', justifyContent: 'center', gap: 2,
+    backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center', gap: 2,
   },
-
   tapHint: { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5 },
-  heading: { fontSize: 24, fontWeight: '700', color: '#111', textAlign: 'center', marginBottom: 12 },
-  subtext: { fontSize: 15, color: '#888', textAlign: 'center', lineHeight: 22, marginBottom: 28 },
+  heading: { fontSize: 24, fontWeight: '700', color: c.ink, textAlign: 'center', marginBottom: 12 },
+  subtext: { fontSize: 15, color: c.muted, textAlign: 'center', lineHeight: 22, marginBottom: 28 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
-  dotScanning: { backgroundColor: '#F5A623' },
-  statusText: { fontSize: 14, color: '#555', fontWeight: '500' },
-
-  // ── Success ──
+  dotScanning: { backgroundColor: c.amber },
+  statusText: { fontSize: 14, color: c.inkSoft, fontWeight: '500' },
   successCircle: {
     width: 120, height: 120, borderRadius: 60,
-    backgroundColor: '#22c55e',
+    backgroundColor: c.success,
     alignItems: 'center', justifyContent: 'center', marginBottom: 36,
   },
-
   tagIdRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#e8e8e8', borderRadius: 10,
+    backgroundColor: c.border, borderRadius: 10,
     paddingVertical: 8, paddingHorizontal: 16, marginTop: 6,
   },
-  tagIdLabel: { fontSize: 12, fontWeight: '600', color: '#888', textTransform: 'uppercase', letterSpacing: 0.8 },
-  tagIdValue: { fontSize: 13, fontWeight: '700', color: '#111', fontVariant: ['tabular-nums'] },
-
-  // ── Skip ──
+  tagIdLabel: { fontSize: 12, fontWeight: '600', color: c.muted, textTransform: 'uppercase', letterSpacing: 0.8 },
+  tagIdValue: { fontSize: 13, fontWeight: '700', color: c.ink, fontVariant: ['tabular-nums'] as any },
   skipBtn: { paddingBottom: 52, paddingTop: 16 },
-  skipText: { fontSize: 15, color: '#999', fontWeight: '500', textDecorationLine: 'underline' },
+  skipText: { fontSize: 15, color: c.mutedLight, fontWeight: '500', textDecorationLine: 'underline' },
 });

@@ -1,11 +1,12 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   ScrollView, Platform, Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
-import { colors, fontSize, spacing, radii } from '../constants/theme';
+import { ColorPalette, fontSize, spacing, radii } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 function formatDuration(mins: number): string {
@@ -19,6 +20,8 @@ function formatDuration(mins: number): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function SessionCompleteScreen({ nav }: { nav: NavProps }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   // ── Derive all values from session params ────────────────────────────────────
   const actualMins   = parseInt(nav.params.actualMinutes ?? nav.params.duration ?? '45');
   const focusScore   = nav.params.focusScore   ?? '—';
@@ -59,7 +62,7 @@ export default function SessionCompleteScreen({ nav }: { nav: NavProps }) {
     >
       {/* ── Completion icon ─────────────────────────────────────────────────── */}
       <Animated.View style={[styles.iconCircle, { transform: [{ scale: iconScale }] }]}>
-        <Ionicons name="checkmark-done" size={30} color={colors.white} />
+        <Ionicons name="checkmark-done" size={30} color={colors.bg} />
       </Animated.View>
 
       {/* ── Heading ─────────────────────────────────────────────────────────── */}
@@ -113,91 +116,75 @@ export default function SessionCompleteScreen({ nav }: { nav: NavProps }) {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  screen:    { flex: 1, backgroundColor: colors.bg },
+const makeStyles = (c: ColorPalette) => StyleSheet.create({
+  screen:    { flex: 1, backgroundColor: c.bg },
   container: {
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
     paddingTop: Platform.OS === 'ios' ? 80 : 60,
     paddingBottom: 52,
   },
-
-  // Completion icon circle
   iconCircle: {
     width: 80, height: 80, borderRadius: 40,
-    backgroundColor: colors.ink,
+    backgroundColor: c.ink,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: spacing.xl,
-    // Soft shadow so it lifts off the page
-    shadowColor: colors.black, shadowOffset: { width: 0, height: 6 },
+    shadowColor: c.black, shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.18, shadowRadius: 14, elevation: 8,
   },
-
-  // Animated content wrapper
   content: { alignSelf: 'stretch', alignItems: 'center' },
-
-  // Heading
   title: {
-    fontSize: fontSize.xxl + 4, fontWeight: '700', color: colors.ink,
+    fontSize: fontSize.xxl + 4, fontWeight: '700', color: c.ink,
     textAlign: 'center', marginBottom: spacing.xs + 2,
   },
   subtitle: {
-    fontSize: fontSize.sm + 1, color: colors.muted,
+    fontSize: fontSize.sm + 1, color: c.muted,
     textAlign: 'center', marginBottom: spacing.xxxl,
   },
-
-  // 2×2 Stats grid
   grid: {
     flexDirection: 'row', flexWrap: 'wrap',
     gap: spacing.sm + 2, alignSelf: 'stretch', marginBottom: spacing.md + 2,
   },
   statCard: {
-    // Each card takes exactly half the row minus the gap
     flexBasis: '47%', flexGrow: 1,
-    backgroundColor: colors.border,
+    backgroundColor: c.border,
     borderRadius: radii.lg,
     paddingVertical: spacing.xl,
     paddingHorizontal: spacing.md,
     alignItems: 'center', justifyContent: 'center',
   },
   statValue: {
-    fontSize: fontSize.xxl + 4, fontWeight: '700', color: colors.ink,
+    fontSize: fontSize.xxl + 4, fontWeight: '700', color: c.ink,
     marginBottom: spacing.xs,
   },
   statLabel: {
     fontSize: fontSize.xs, fontWeight: '600',
-    color: colors.muted, letterSpacing: 0.8,
+    color: c.muted, letterSpacing: 0.8,
   },
-
-  // Streak container
   streakBox: {
     alignSelf: 'stretch',
-    borderWidth: 1.5, borderColor: colors.border,
+    borderWidth: 1.5, borderColor: c.border,
     borderRadius: radii.lg,
     paddingVertical: spacing.lg, paddingHorizontal: spacing.xl,
     marginBottom: spacing.xxl,
-    backgroundColor: colors.white,
+    backgroundColor: c.card,
   },
   streakLabel: {
     fontSize: fontSize.xs, fontWeight: '600',
-    color: colors.muted, letterSpacing: 0.8,
+    color: c.muted, letterSpacing: 0.8,
     marginBottom: spacing.xs + 2,
   },
   streakRow:  { flexDirection: 'row', alignItems: 'center' },
-  streakValue: {
-    fontSize: fontSize.xxl + 4, fontWeight: '700', color: colors.ink,
-  },
+  streakValue: { fontSize: fontSize.xxl + 4, fontWeight: '700', color: c.ink },
   flameIcon: { marginLeft: spacing.sm, marginTop: 2 },
-
-  // Buttons
   primaryBtn: {
     alignSelf: 'stretch',
-    backgroundColor: colors.ink, borderRadius: radii.lg,
+    backgroundColor: c.ink, borderRadius: radii.lg,
     paddingVertical: 18, alignItems: 'center', marginBottom: spacing.lg,
-    shadowColor: colors.black, shadowOffset: { width: 0, height: 4 },
+    shadowColor: c.black, shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.14, shadowRadius: 10, elevation: 5,
   },
-  primaryBtnText: { color: colors.white, fontSize: fontSize.lg - 1, fontWeight: '700' },
-  secondaryBtn:   { paddingVertical: spacing.md },
-  secondaryBtnText: { color: colors.muted, fontSize: fontSize.md, fontWeight: '500' },
+  primaryBtnText:   { color: c.bg, fontSize: fontSize.lg - 1, fontWeight: '700' },
+  secondaryBtn:     { paddingVertical: spacing.md },
+  secondaryBtnText: { color: c.muted, fontSize: fontSize.md, fontWeight: '500' },
 });

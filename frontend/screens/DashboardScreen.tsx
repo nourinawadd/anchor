@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,7 +6,8 @@ import { NavProps } from '../App';
 import Card from '../components/Card';
 import SectionLabel from '../components/SectionLabel';
 import PillBadge from '../components/PillBadge';
-import { colors, spacing, fontSize, radii } from '../constants/theme';
+import { ColorPalette, spacing, fontSize, radii } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import { computeStreak, computeFocusHours, computeTodayScore, computeDailyProgress, toDateStr } from '../store/sessions';
 import type { SessionRecord } from '../App';
 
@@ -28,6 +29,8 @@ function bestTimeLabel(sessions: SessionRecord[]): string | null {
 }
 
 export default function DashboardScreen({ nav }: { nav: NavProps }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { sessions, user } = nav;
   const videoRef   = useRef<Video>(null);
   const [videoReady, setVideoReady] = useState(false);
@@ -136,14 +139,14 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
               {user.preferredDuration} min{user.pomodoroEnabled ? ' · Pomodoro' : ''}
             </Text>
           </View>
-          <PillBadge label="Study" bg={colors.ink} color={colors.white} />
+          <PillBadge label="Study" bg={colors.ink} color={colors.bg} />
         </View>
       </Card>
 
       {/* ── Smart Suggestion (driven by real session data) ────────────────── */}
       <Card style={styles.mb14} padding={18}>
         <View style={styles.suggestionHeader}>
-          <Ionicons name="bulb-outline" size={13} color={colors.muted} />
+          <Ionicons name="bulb-outline" size={13} color={colors.muted} />{/* colors from useTheme */}
           <SectionLabel noTopMargin style={styles.suggestionLabelOverride}>Smart Suggestion</SectionLabel>
         </View>
         {bestTime ? (
@@ -170,7 +173,7 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ColorPalette) => StyleSheet.create({
   screen:           { flex: 1, backgroundColor: '#1a1a2e' },
   videoPlaceholder: { ...StyleSheet.absoluteFillObject, backgroundColor: '#1a1a2e' },
   overlay:          { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.)' },
@@ -178,37 +181,37 @@ const styles = StyleSheet.create({
   container:   { padding: spacing.xl, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 52 },
 
   header:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xl },
-  focusDay:  { fontSize: fontSize.xs, fontWeight: '600', color: colors.muted, letterSpacing: 1.5, marginBottom: 2 },
-  dashTitle: { fontSize: fontSize.xxxl, fontWeight: 'bold', color: colors.ink },
-  avatar:    { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.ink, justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: colors.white, fontWeight: '700', fontSize: fontSize.lg },
+  focusDay:  { fontSize: fontSize.xs, fontWeight: '600', color: c.muted, letterSpacing: 1.5, marginBottom: 2 },
+  dashTitle: { fontSize: fontSize.xxxl, fontWeight: 'bold', color: c.ink },
+  avatar:    { width: 42, height: 42, borderRadius: 21, backgroundColor: c.ink, justifyContent: 'center', alignItems: 'center' },
+  avatarText: { color: c.bg, fontWeight: '700', fontSize: fontSize.lg },
 
   scoreCard:          { marginBottom: 14 },
-  scoreLabelOverride: { color: colors.mutedLight, marginBottom: spacing.sm },
-  scoreValue: { color: colors.white, fontSize: fontSize.display, fontWeight: 'bold', marginBottom: 18 },
+  scoreLabelOverride: { color: c.mutedLight, marginBottom: spacing.sm },
+  scoreValue: { color: '#ffffff', fontSize: fontSize.display, fontWeight: 'bold', marginBottom: 18 },
   scoreMax:   { fontSize: fontSize.xl, color: '#666', fontWeight: 'normal' },
-  progressTrack: { height: 6, backgroundColor: colors.darkBorder, borderRadius: 3, overflow: 'hidden' },
-  progressFill:  { height: 6, backgroundColor: colors.yellow, borderRadius: 3 },
+  progressTrack: { height: 6, backgroundColor: c.darkBorder, borderRadius: 3, overflow: 'hidden' },
+  progressFill:  { height: 6, backgroundColor: c.yellow, borderRadius: 3 },
 
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
   statCard: { flex: 1 },
-  statValue: { fontSize: 22, fontWeight: 'bold', color: colors.ink, marginBottom: 2 },
-  statLabel: { fontSize: fontSize.xs, color: colors.muted },
+  statValue: { fontSize: 22, fontWeight: 'bold', color: c.ink, marginBottom: 2 },
+  statLabel: { fontSize: fontSize.xs, color: c.muted },
 
   mb14: { marginBottom: 14 },
 
   goalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  goalPct:    { fontSize: fontSize.lg, fontWeight: '700', color: colors.ink },
-  goalSub:    { fontSize: fontSize.sm, color: colors.muted, marginBottom: spacing.sm },
-  goalTrack:  { height: 6, backgroundColor: colors.border, borderRadius: 3, overflow: 'hidden' },
-  goalFill:   { height: 6, backgroundColor: colors.ink, borderRadius: 3 },
+  goalPct:    { fontSize: fontSize.lg, fontWeight: '700', color: c.ink },
+  goalSub:    { fontSize: fontSize.sm, color: c.muted, marginBottom: spacing.sm },
+  goalTrack:  { height: 6, backgroundColor: c.border, borderRadius: 3, overflow: 'hidden' },
+  goalFill:   { height: 6, backgroundColor: c.ink, borderRadius: 3 },
   sessionRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sessionTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.ink, marginBottom: 4 },
-  sessionSub:   { fontSize: fontSize.sm, color: colors.muted },
+  sessionTitle: { fontSize: fontSize.lg, fontWeight: '700', color: c.ink, marginBottom: 4 },
+  sessionSub:   { fontSize: fontSize.sm, color: c.muted },
   suggestionHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 10 },
   suggestionLabelOverride: { marginTop: 0, marginBottom: 0 },
-  suggestionText: { fontSize: fontSize.sm + 1, color: colors.inkSoft, lineHeight: 22 },
+  suggestionText: { fontSize: fontSize.sm + 1, color: c.inkSoft, lineHeight: 22 },
 
-  startBtn: { backgroundColor: colors.ink, borderRadius: radii.md, paddingVertical: 18, alignItems: 'center', marginTop: 4 },
-  startBtnText: { color: colors.white, fontSize: fontSize.lg - 1, fontWeight: '600' },
+  startBtn: { backgroundColor: c.ink, borderRadius: radii.md, paddingVertical: 18, alignItems: 'center', marginTop: 4 },
+  startBtnText: { color: c.bg, fontSize: fontSize.lg - 1, fontWeight: '600' },
 });

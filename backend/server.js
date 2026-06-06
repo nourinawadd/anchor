@@ -1,4 +1,7 @@
 import 'dotenv/config';
+import dns from 'node:dns';
+dns.setServers(['8.8.8.8', '1.1.1.1']);
+dns.setDefaultResultOrder('ipv4first');
 import express  from 'express';
 import mongoose from 'mongoose';
 import cors     from 'cors';
@@ -30,7 +33,10 @@ app.get('/api/health', (_, res) => res.json({ status: 'ok', ts: new Date() }));
 
 app.use(errorHandler);
 
-mongoose.connect(process.env.MONGO_URI)
+mongoose.connect(process.env.MONGO_URI, {
+  serverSelectionTimeoutMS: 10000,
+  connectTimeoutMS: 10000,
+})
   .then(() => {
     console.log('MongoDB connected');
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

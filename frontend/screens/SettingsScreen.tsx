@@ -1,21 +1,23 @@
 // frontend/screens/SettingsScreen.tsx
 // User preferences. Every change is immediately synced to PATCH /user/settings.
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, Switch, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
 import { NavProps, UserProfile } from '../App';
 import { DAILY_GOAL_OPTIONS, WEEKLY_GOAL_OPTIONS } from '../store/user';
-import { colors, fontSize, spacing, radii } from '../constants/theme';
+import { ColorPalette, fontSize, spacing, radii } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import { apiFetch } from '../api/client';
 
 const DURATION_OPTIONS = [15, 25, 30, 45, 60, 90];
 
 function ChipRow<T extends string | number>({
-  options, active, onSelect, labelOf,
+  options, active, onSelect, labelOf, s,
 }: {
   options: T[];
   active: T;
   onSelect: (v: T) => void;
   labelOf?: (v: T) => string;
+  s: ReturnType<typeof makeStyles>;
 }) {
   return (
     <View style={s.chipsRow}>
@@ -38,8 +40,9 @@ function ChipRow<T extends string | number>({
   );
 }
 
-function ToggleRow({ label, desc, value, onChange }: {
+function ToggleRow({ label, desc, value, onChange, s, colors }: {
   label: string; desc: string; value: boolean; onChange: (v: boolean) => void;
+  s: ReturnType<typeof makeStyles>; colors: ColorPalette;
 }) {
   return (
     <View style={s.toggleRow}>
@@ -54,6 +57,8 @@ function ToggleRow({ label, desc, value, onChange }: {
 }
 
 export default function SettingsScreen({ nav }: { nav: NavProps }) {
+  const { colors } = useTheme();
+  const s = useMemo(() => makeStyles(colors), [colors]);
   const { user, token } = nav;
   const initial = user.name.charAt(0).toUpperCase();
 
@@ -110,6 +115,7 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
           active={user.dailyGoalMinutes}
           onSelect={v => updateAndSync({ dailyGoalMinutes: v })}
           labelOf={v => DAILY_GOAL_OPTIONS.find(o => o.minutes === v)?.label ?? `${v}m`}
+          s={s}
         />
       </View>
       <View style={s.selectCard}>
@@ -120,6 +126,7 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
           active={user.weeklyGoalMinutes}
           onSelect={v => updateAndSync({ weeklyGoalMinutes: v })}
           labelOf={v => WEEKLY_GOAL_OPTIONS.find(o => o.minutes === v)?.label ?? `${v}m`}
+          s={s}
         />
       </View>
 
@@ -132,6 +139,7 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
           active={user.preferredDuration}
           onSelect={v => updateAndSync({ preferredDuration: v })}
           labelOf={v => `${v} min`}
+          s={s}
         />
       </View>
       <View style={s.card}>
@@ -140,16 +148,26 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
           desc="Enable 25 min focus / 5 min break by default"
           value={user.pomodoroEnabled}
           onChange={v => updateAndSync({ pomodoroEnabled: v })}
+          s={s} colors={colors}
         />
       </View>
 
       <Text style={s.sectionLabel}>PREFERENCES</Text>
       <View style={s.card}>
         <ToggleRow
+          label="Dark Mode"
+          desc="Invert the app's colour scheme"
+          value={user.darkMode}
+          onChange={v => nav.updateUser({ darkMode: v })}
+          s={s} colors={colors}
+        />
+        <View style={s.dividerLine} />
+        <ToggleRow
           label="Notifications"
           desc="Session reminders and completion alerts"
           value={user.notificationsEnabled}
           onChange={v => updateAndSync({ notificationsEnabled: v })}
+          s={s} colors={colors}
         />
       </View>
 
@@ -158,29 +176,30 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
   );
 }
 
-const s = StyleSheet.create({
-  screen:       { flex: 1, backgroundColor: colors.bg },
+const makeStyles = (c: ColorPalette) => StyleSheet.create({
+  screen:       { flex: 1, backgroundColor: c.bg },
   container:    { paddingHorizontal: spacing.xl, paddingTop: Platform.OS === 'ios' ? 60 : 44, paddingBottom: 48 },
   header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 },
   menuBtn:      { width: 40, height: 40, justifyContent: 'center' },
-  menuLine:     { width: 22, height: 2.5, backgroundColor: colors.ink, borderRadius: 2, marginBottom: 5 },
-  title:        { fontSize: fontSize.xl, fontWeight: '700', color: colors.ink },
-  sectionLabel: { fontSize: 11, fontWeight: '700', color: colors.muted, letterSpacing: 1.2, marginBottom: 10, marginTop: 4 },
-  card:         { backgroundColor: colors.card, borderRadius: radii.lg, marginBottom: spacing.lg, overflow: 'hidden', shadowColor: colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  selectCard:   { backgroundColor: colors.card, borderRadius: radii.lg, padding: spacing.lg, marginBottom: spacing.md, shadowColor: colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  menuLine:     { width: 22, height: 2.5, backgroundColor: c.ink, borderRadius: 2, marginBottom: 5 },
+  title:        { fontSize: fontSize.xl, fontWeight: '700', color: c.ink },
+  sectionLabel: { fontSize: 11, fontWeight: '700', color: c.muted, letterSpacing: 1.2, marginBottom: 10, marginTop: 4 },
+  card:         { backgroundColor: c.card, borderRadius: radii.lg, marginBottom: spacing.lg, overflow: 'hidden', shadowColor: c.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  selectCard:   { backgroundColor: c.card, borderRadius: radii.lg, padding: spacing.lg, marginBottom: spacing.md, shadowColor: c.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   profileRow:   { flexDirection: 'row', alignItems: 'center', padding: spacing.lg, gap: spacing.md },
-  avatar:       { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.ink, justifyContent: 'center', alignItems: 'center' },
-  avatarTxt:    { color: colors.white, fontWeight: '700', fontSize: fontSize.lg },
+  avatar:       { width: 48, height: 48, borderRadius: 24, backgroundColor: c.ink, justifyContent: 'center', alignItems: 'center' },
+  avatarTxt:    { color: c.bg, fontWeight: '700', fontSize: fontSize.lg },
   profileInfo:  { flex: 1 },
-  profileName:  { fontSize: fontSize.lg, fontWeight: '700', color: colors.ink, marginBottom: 2 },
-  profileEmail: { fontSize: fontSize.sm, color: colors.muted },
+  profileName:  { fontSize: fontSize.lg, fontWeight: '700', color: c.ink, marginBottom: 2 },
+  profileEmail: { fontSize: fontSize.sm, color: c.muted },
   toggleRow:    { flexDirection: 'row', alignItems: 'center', padding: spacing.lg },
   rowInfo:      { flex: 1, marginRight: spacing.md },
-  rowLabel:     { fontSize: fontSize.md, fontWeight: '600', color: colors.ink, marginBottom: 2 },
-  rowDesc:      { fontSize: fontSize.xs + 1, color: colors.muted },
+  rowLabel:     { fontSize: fontSize.md, fontWeight: '600', color: c.ink, marginBottom: 2 },
+  rowDesc:      { fontSize: fontSize.xs + 1, color: c.muted },
   chipsRow:     { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
-  chip:         { paddingHorizontal: spacing.md + 2, paddingVertical: spacing.sm, borderRadius: radii.full, borderWidth: 1.5, borderColor: colors.border },
-  chipOn:       { backgroundColor: colors.ink, borderColor: colors.ink },
-  chipTxt:      { fontSize: fontSize.sm, color: colors.muted, fontWeight: '500' },
-  chipTxtOn:    { color: colors.white, fontWeight: '600' },
+  chip:         { paddingHorizontal: spacing.md + 2, paddingVertical: spacing.sm, borderRadius: radii.full, borderWidth: 1.5, borderColor: c.border },
+  chipOn:       { backgroundColor: c.ink, borderColor: c.ink },
+  chipTxt:      { fontSize: fontSize.sm, color: c.muted, fontWeight: '500' },
+  chipTxtOn:    { color: c.bg, fontWeight: '600' },
+  dividerLine:  { height: StyleSheet.hairlineWidth, backgroundColor: c.border, marginHorizontal: spacing.lg },
 });

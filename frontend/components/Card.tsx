@@ -1,31 +1,26 @@
 import React from 'react';
 import { View, ViewStyle, StyleSheet } from 'react-native';
-import { colors, radii } from '../constants/theme';
+import { radii } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 
 type Props = {
   children: React.ReactNode;
-  /** Use the dark (#1a1a1a) surface instead of white */
+  /** Force the dark card surface (regardless of global theme) */
   dark?: boolean;
   style?: ViewStyle;
   padding?: number;
 };
 
 export default function Card({ children, dark = false, style, padding = 16 }: Props) {
+  const { colors, dark: isDark } = useTheme();
+  const bg = dark ? colors.darkCard : isDark ? colors.card : colors.card;
   return (
-    <View
-      style={[
-        styles.base,
-        { backgroundColor: dark ? colors.darkCard : colors.card, padding },
-        style,
-      ]}
-    >
+    <View style={[styles.base, { backgroundColor: bg, padding }, style]}>
       {children}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  base: {
-    borderRadius: radii.lg,
-  },
+  base: { borderRadius: radii.lg },
 });
