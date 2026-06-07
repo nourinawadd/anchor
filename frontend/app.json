@@ -21,6 +21,7 @@
         "NSFamilyControlsUsageDescription": "Anchor uses Screen Time to shield distracting apps during your focus sessions."
       },
       "buildNumber": "29",
+      "usesAppleSignIn": true,
       "entitlements": {
         "com.apple.developer.family-controls": true
       }
@@ -53,6 +54,12 @@
         "react-native-nfc-manager",
         {
           "nfcPermission": "Anchor uses NFC to verify your physical presence at your focus location during sessions."
+        }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.129531586894-j4idsokok0s7nvlb3lifbhkpvh4dmg9j"
         }
       ]
     ],

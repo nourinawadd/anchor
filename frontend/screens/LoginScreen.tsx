@@ -8,6 +8,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
 import { apiFetch, setTokens } from '../api/client';
+import { signInWithGoogle, signInWithApple, isAppleAuthSupported, CANCELLED } from '../auth/social';
 
 type Errors = { email?: string; password?: string; api?: string };
 
@@ -43,6 +44,27 @@ export default function LoginScreen({ nav }: { nav: NavProps }) {
       nav.replace('Dashboard', { name: user.name, email: user.email });
     } catch (e: any) {
       setErrors({ api: e.message ?? 'Login failed. Check your credentials.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSocial = async (provider: 'google' | 'apple') => {
+    if (loading) return;
+    setLoading(true);
+    setErrors({});
+    try {
+      const result = provider === 'google'
+        ? await signInWithGoogle()
+        : await signInWithApple();
+      if (result === CANCELLED) return;               // user dismissed the sheet
+      const { accessToken, refreshToken, user } = result;
+      await setTokens({ accessToken, refreshToken });
+      nav.setToken(accessToken);
+      nav.updateUser({ name: user.name, email: user.email });
+      nav.replace('Dashboard', { name: user.name, email: user.email });
+    } catch (e: any) {
+      setErrors({ api: e.message ?? 'Sign-in failed. Please try again.' });
     } finally {
       setLoading(false);
     }
@@ -99,18 +121,28 @@ export default function LoginScreen({ nav }: { nav: NavProps }) {
         </View>
 
         <View style={styles.socialRow}>
-          <TouchableOpacity style={styles.socialBtn}>
+          <TouchableOpacity
+            style={[styles.socialBtn, loading && styles.buttonDisabled]}
+            onPress={() => handleSocial('google')}
+            disabled={loading}
+          >
             <View style={styles.socialContent}>
               <Ionicons name="logo-google" size={17} color="#111" />
               <Text style={styles.socialText}>Google</Text>
             </View>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.socialBtn}>
-            <View style={styles.socialContent}>
-              <Ionicons name="logo-apple" size={18} color="#111" />
-              <Text style={styles.socialText}>Apple</Text>
-            </View>
-          </TouchableOpacity>
+          {isAppleAuthSupported && (
+            <TouchableOpacity
+              style={[styles.socialBtn, loading && styles.buttonDisabled]}
+              onPress={() => handleSocial('apple')}
+              disabled={loading}
+            >
+              <View style={styles.socialContent}>
+                <Ionicons name="logo-apple" size={18} color="#111" />
+                <Text style={styles.socialText}>Apple</Text>
+              </View>
+            </TouchableOpacity>
+          )}
         </View>
 
         <TouchableOpacity onPress={() => nav.navigate('SignUp')}>
