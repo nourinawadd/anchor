@@ -15,11 +15,21 @@ npm start       # node server.js — production
 ```
 
 ### Frontend (`frontend/`)
+
+> **⚠️ This app uses a custom dev client — NEVER use Expo Go.** It bundles custom native modules (`anchor-screen-time`, NFC, Screen Time / Family Controls) that Expo Go cannot load. Expo Go is not a supported option and must never be suggested. Always run against a development build.
+
 ```bash
-npx expo start            # opens Expo dev tools
-npx expo start --android  # Android emulator
-npx expo start --ios      # iOS simulator
-npx expo start --web      # web preview
+npx expo start --dev-client   # daily dev: starts Metro, then scan the QR with the installed dev build
+npx expo start --web          # web preview (limited — native modules are unavailable)
+```
+
+**iOS development build (one-time setup, then reuse the installed app):**
+```bash
+npm i -g eas-cli
+eas login
+eas device:create                          # register the target iPhone's UDID (iOS only)
+eas build -p ios --profile development      # cloud build; returns a QR/install link
+# Install the build on the iPhone, then daily: npx expo start --dev-client and scan the QR
 ```
 
 There are no tests in this project.

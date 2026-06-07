@@ -425,21 +425,20 @@ Statistics.setStreak(userId, dateStr, current, longest)
    EXPO_PUBLIC_API_URL=http://10.0.2.2:5000/api
    ```
 
-4. **Start Expo dev server**:
-   ```bash
-   npx expo start
-   ```
+> **⚠️ Do NOT use Expo Go.** Anchor bundles custom native modules (`anchor-screen-time`, NFC, Screen Time / Family Controls) that Expo Go cannot load. You must run against a **development build** (dev client). Expo Go is not a supported option.
 
-5. **Run on platform**:
+4. **Build & install the iOS development build (one-time per device):**
    ```bash
-   # Android Emulator
-   npx expo run:android
-   
-   # iOS Simulator
-   npx expo run:ios
-   
-   # Web
-   npx expo start --web
+   npm i -g eas-cli
+   eas login
+   eas device:create                       # register your iPhone's UDID (iOS only)
+   eas build -p ios --profile development   # cloud build; EAS asks for Apple credentials, returns a QR/install link
+   ```
+   Open the QR/link on the iPhone to install the dev build.
+
+5. **Daily development** — once the dev build is installed, just start Metro and scan the QR with the installed app:
+   ```bash
+   npx expo start --dev-client
    ```
 
 ---
@@ -484,13 +483,10 @@ npm run dev
 ```bash
 cd frontend
 npm install
-npx expo start
+npx expo start --dev-client
 ```
 
-Then choose platform:
-- Press `a` for Android emulator
-- Press `i` for iOS simulator
-- Press `w` for web
+> **⚠️ Requires the installed development build — NOT Expo Go.** See [Frontend Setup](#frontend-setup) for the one-time `eas build -p ios --profile development` step. Once the dev build is on your device, scan the QR from `npx expo start --dev-client` to connect. Expo Go is not supported because of the custom native modules.
 
 ### Production
 
