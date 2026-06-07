@@ -10,6 +10,7 @@ import './models/Session.js';
 import './models/FocusLog.js';
 import './models/Statistics.js';
 import './models/AIInsight.js';
+import './models/Task.js';
 import './models/RefreshToken.js';
 import { connectDB, disconnectDB } from './config/db.js';
 import authRoutes      from './routes/auth.js';
@@ -17,7 +18,8 @@ import userRoutes      from './routes/user.js';
 import sessionRoutes   from './routes/sessions.js';
 import analyticsRoutes from './routes/analytics.js';
 import errorHandler    from './middleware/errorHandler.js';
-import aiRoutes        from './routes/ai.js';
+import aiRoutes from './routes/ai.js';
+import taskRoutes from './routes/tasks.js';
 
 // ─── Fail fast on misconfiguration ──────────────────────────────────────────
 // Better to crash on boot than to run with a weak/absent secret or open CORS.
@@ -49,6 +51,7 @@ app.use('/api/user',      userRoutes);
 app.use('/api/sessions',  sessionRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/ai',        aiRoutes);
+app.use('/api/tasks', taskRoutes);
 
 // Liveness + readiness: 503 unless the Mongo connection is actually up.
 app.get('/api/health', (_req, res) => {
