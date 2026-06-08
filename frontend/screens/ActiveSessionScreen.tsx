@@ -12,6 +12,7 @@ import PillBadge from '../components/PillBadge';
 import { colors, spacing, radii, fontSize } from '../constants/theme';
 import { apiFetch } from '../api/client';
 import { initNFC, readTag, cancelScan, isNFCSupported } from '../utils/nfc';
+import { scheduleSessionAlert, cancelSessionAlert } from '../notifications';
 import {
   isSupported as screenTimeSupported,
   hasSelection as screenTimeHasSelection,
@@ -230,6 +231,38 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   // focus→break→focus) still re-anchors the deadline for the new phase.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [running, phase, round]);
+
+  // What the user should be told when the current phase's deadline arrives.
+  const nextPhaseAlert = (): { title: string; body: string } | null => {
+    if (!isPomo) {
+      return phase === 'focus'
+        ? { title: 'Session complete! 🎯', body: 'Great work — tap to see your results.' }
+        : null;
+    }
+    if (phase === 'focus') {
+      return { title: 'Time for a break 🌿', body: `Round ${round} done. Step away for ${pomoBreak} min.` };
+    }
+    return round < maxRounds
+      ? { title: 'Break over — back to focus 💪', body: `Starting round ${round + 1} of ${maxRounds}.` }
+      : { title: 'Session complete! 🎯', body: 'You finished all your rounds — tap to see your results.' };
+  };
+
+  // Schedule a local notification at the phase deadline so a break / resume /
+  // completion still alerts the user while the app is backgrounded. Re-runs per
+  // phase; the timer effect above re-anchors deadlineRef first (same deps).
+  useEffect(() => {
+    if (running && nav.user.notificationsEnabled) {
+      const msg = nextPhaseAlert();
+      if (msg) scheduleSessionAlert(new Date(deadlineRef.current), msg.title, msg.body);
+      else cancelSessionAlert();
+    } else {
+      cancelSessionAlert();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, phase, round, nav.user.notificationsEnabled]);
+
+  // Cancel any pending phase alert when leaving the screen (session ended/unmounted).
+  useEffect(() => () => { cancelSessionAlert(); }, []);
 
   // Snap the timer to real elapsed time the instant we return to foreground
   // (don't wait for the next tick). For Pomodoro, reconcile any phases that

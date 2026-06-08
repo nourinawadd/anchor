@@ -22,6 +22,7 @@ import ComingSoonScreen from './screens/ComingSoonScreen';
 import NFCSetupScreen from './screens/NFCSetupScreen';
 import Drawer from './components/Drawer';
 import { apiFetch, loadTokens, logout as clearAuth, setOnAuthExpired } from './api/client';
+import { registerForPush, unregisterPush } from './notifications';
 
 export type ScreenName =
   | 'SignUp' | 'Login' | 'Dashboard' | 'Profile' | 'Settings'
@@ -108,6 +109,7 @@ export default function App() {
   }, [fadeAnim]);
 
   const signOut = useCallback(() => {
+    unregisterPush().catch(console.error);   // drop this device's push token (uses current token)
     clearAuth().catch(console.error);   // revoke refresh token server-side + clear local
     setTokenState(null);
     setSessions([]);
@@ -123,6 +125,13 @@ export default function App() {
     setOnAuthExpired(signOut);
     return () => setOnAuthExpired(null);
   }, [signOut]);
+
+  // Once authenticated, register this device for push (prompts for permission
+  // on first grant, silent thereafter) and hand the token to the backend.
+  useEffect(() => {
+    if (!token) return;
+    registerForPush().catch(console.error);
+  }, [token]);
 
   const refreshSessions = useCallback(() => {
     if (!token) return;
