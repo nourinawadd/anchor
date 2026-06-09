@@ -173,6 +173,8 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
       <View style={{ height: 48 }} />
     </ScrollView>
   );
+}
+
 const s = StyleSheet.create({
   screen:       { flex: 1, backgroundColor: colors.bg },
   container:    { paddingHorizontal: spacing.xl, paddingTop: Platform.OS === 'ios' ? 60 : 44, paddingBottom: 48 },
