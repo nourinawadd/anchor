@@ -90,26 +90,9 @@ async function buildUserProfile(userId) {
   };
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-function buildPrompt(profile, tasks = []) {
-    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-    const taskList = tasks.length > 0
-        ? tasks.map(t => `  - ${t.name} (priority: ${t.priority})`).join('\n')
-        : '  (no tasks added � use General Focus)';
-
-    return `You are a productivity coach AI analyzing a user's focus session data from the last 30 days.
-=======
 function buildPrompt(profile) {
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   return `You are a productivity coach AI analyzing a user's focus session data from the last 30 days.
->>>>>>> parent of 54a5bc9 (cont:add tasks management)
-=======
-function buildPrompt(profile) {
-  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  return `You are a productivity coach AI analyzing a user's focus session data from the last 30 days.
->>>>>>> parent of 54a5bc9 (cont:add tasks management)
 
 USER PROFILE:
 - Total completed sessions: ${profile.sessionCount}
@@ -207,28 +190,14 @@ export async function getOrGenerateInsight(userId, { force = false } = {}) {
   }
 
   const prompt = buildPrompt(profile);
-    const aiResponse = await generateJSON(prompt, INSIGHT_SCHEMA);
+  const aiResponse = await generateJSON(prompt, INSIGHT_SCHEMA);
   const validated = validateAndClamp(aiResponse);
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-    const insight = await AIInsight.findOneAndUpdate(
-        { userId },
-        { $set: { ...validated, trainingSize: profile.sessionCount, generatedAt: new Date() } },
-        { upsert: true, returnDocument: 'after' },
-    );
-=======
-=======
->>>>>>> parent of 54a5bc9 (cont:add tasks management)
   const insight = await AIInsight.findOneAndUpdate(
     { userId },
     { $set: { ...validated, trainingSize: profile.sessionCount, generatedAt: new Date() } },
     { upsert: true, new: true },
   );
-<<<<<<< HEAD
->>>>>>> parent of 54a5bc9 (cont:add tasks management)
-=======
->>>>>>> parent of 54a5bc9 (cont:add tasks management)
 
   return { insight, cached: false };
 }
