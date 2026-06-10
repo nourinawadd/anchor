@@ -39,6 +39,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   const pomoWork    = parseInt(nav.params.pomodoroWork  ?? '25');
   const pomoBreak   = parseInt(nav.params.pomodoroBreak ?? '5');
   const blockedApps = (nav.params.blockedApps ?? '').split(',').filter(Boolean);
+  const sessionName = nav.params.customName || 'Untitled';
 
   const FOCUS_SECS = isPomo ? pomoWork  * 60 : totalSecs;
   const BREAK_SECS = isPomo ? pomoBreak * 60 : 0;
@@ -422,7 +423,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
         <PillBadge label={statusLabel} bg={colors.darkCard} color={statusColor} dot dotColor={statusColor} />
       </View>
 
-      <Text style={styles.sessionName}>{sessionType} Session</Text>
+      <Text style={styles.sessionName}>{sessionName}</Text>
 
       {isPomo && (
         <View style={styles.pomoRow}>
