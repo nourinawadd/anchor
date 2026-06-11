@@ -26,7 +26,8 @@ export type UserProfile = {
 
   // ── Preferences ───────────────────────────────────────────────────────────
   notificationsEnabled: boolean;
-  reminderHour: number;
+  reminderHour: number;   // evening hour: daily summary + goal nudge (streak alert at +1)
+  nudgeHour: number;      // morning hour: start nudge, sent only if no session yet that day
   notify: {
     dailyNudge:      boolean;
     inSessionAlerts: boolean;
@@ -47,6 +48,7 @@ export const DEFAULT_USER: UserProfile = {
   categories: [],
   notificationsEnabled: true,
   reminderHour: 20,
+  nudgeHour: 9,
   notify: {
     dailyNudge:      true,
     inSessionAlerts: true,

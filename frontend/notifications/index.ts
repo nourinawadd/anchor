@@ -80,30 +80,15 @@ export async function unregisterPush(): Promise<void> {
   lastPushToken = null;
 }
 
-// ─── Daily start nudge (local, repeating) ──────────────────────────────────────
-// A fixed identifier lets us re-schedule idempotently when the user changes the
-// time, without piling up duplicates.
+// ─── Daily start nudge (legacy cleanup) ────────────────────────────────────────
+// The nudge used to be a local repeating notification scheduled here, which
+// fired blindly — a local trigger can't know whether the user already focused
+// that day. It's now a backend-cron push (jobs/notificationCron.js) sent only
+// when no session exists for the day. Devices that installed the old build may
+// still carry the repeating notification, so cancel it once on launch.
 const DAILY_NUDGE_ID = 'daily-start-nudge';
 
-export async function scheduleDailyNudge(hour: number, minute = 0): Promise<void> {
-  await cancelDailyNudge();
-  await Notifications.scheduleNotificationAsync({
-    identifier: DAILY_NUDGE_ID,
-    content: {
-      title: 'Time to focus 🎯',
-      body:  'Start a session and keep your streak alive.',
-      sound: true,
-    },
-    trigger: {
-      type:    Notifications.SchedulableTriggerInputTypes.CALENDAR,
-      hour,
-      minute,
-      repeats: true,
-    },
-  });
-}
-
-export async function cancelDailyNudge(): Promise<void> {
+export async function cancelLegacyDailyNudge(): Promise<void> {
   await Notifications.cancelScheduledNotificationAsync(DAILY_NUDGE_ID).catch(() => {});
 }
 

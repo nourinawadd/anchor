@@ -29,7 +29,10 @@ const SettingsSchema = new mongoose.Schema({
   weeklyGoalMinutes: { type: Number, default: 600 },
 
   notificationsEnabled: { type: Boolean, default: true },
+  // Evening hour for the daily summary + goal nudge (streak alert fires at +1).
   reminderHour:         { type: Number, default: 20 },
+  // Morning hour for the start nudge — sent only if no session exists that day.
+  nudgeHour:            { type: Number, default: 9 },
   notify:               { type: NotifySchema, default: () => ({}) },
 
   // IANA timezone (e.g. "Europe/Istanbul"). Drives all server-side
@@ -77,6 +80,7 @@ const UserSchema = new mongoose.Schema({
       summaryDateStr: { type: String, default: '' },
       streakDateStr:  { type: String, default: '' },
       goalDateStr:    { type: String, default: '' },
+      nudgeDateStr:   { type: String, default: '' },
     }, { _id: false }),
     default: () => ({}),
   },

@@ -8,6 +8,7 @@ vi.mock('../utils/push.js', () => ({
 import { sendPush } from '../utils/push.js';
 import { processUser } from '../jobs/notificationCron.js';
 import User from '../models/User.js';
+import Session from '../models/Session.js';
 import Statistics from '../models/Statistics.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -34,6 +35,7 @@ async function makeUser(overrides = {}) {
     settings: {
       notificationsEnabled: true,
       reminderHour:         20,
+      nudgeHour:            9,
       dailyGoalMinutes:     120,
       timezone:             'UTC',
       notify: {
@@ -69,7 +71,80 @@ async function makeStat(userId, dateStr, fields = {}) {
   );
 }
 
+/** Create a minimal Session document for the given user and date. */
+async function makeSession(userId, dateStr, fields = {}) {
+  return Session.create({
+    userId,
+    categoryId:  'uncategorized',
+    dateStr,
+    timerConfig: { plannedDuration: 45 },
+    ...fields,
+  });
+}
+
 beforeEach(() => sendPush.mockClear());
+
+// ─── Daily start nudge ────────────────────────────────────────────────────────
+
+describe('daily start nudge', () => {
+  it('sends at nudgeHour when the user has no session yet today', async () => {
+    const user = await makeUser();
+
+    await processUser(user, nowAtHour(9));
+
+    expect(sendPush).toHaveBeenCalledOnce();
+    const [, msg] = sendPush.mock.calls[0];
+    expect(msg.data.type).toBe('DAILY_NUDGE');
+  });
+
+  it('does not send when a session already exists today — even an active one', async () => {
+    const user = await makeUser();
+    await makeSession(user._id, today, { status: 'ACTIVE' });
+
+    await processUser(user, nowAtHour(9));
+
+    expect(sendPush).not.toHaveBeenCalled();
+  });
+
+  it('does not send at a different hour', async () => {
+    const user = await makeUser(); // nudgeHour = 9
+
+    await processUser(user, nowAtHour(10));
+
+    const nudges = sendPush.mock.calls.filter(([, m]) => m.data?.type === 'DAILY_NUDGE');
+    expect(nudges).toHaveLength(0);
+  });
+
+  it('does not send when dailyNudge is disabled', async () => {
+    const user = await makeUser({ settings: { notificationsEnabled: true, reminderHour: 20, nudgeHour: 9, timezone: 'UTC', dailyGoalMinutes: 120, notify: { dailyNudge: false, inSessionAlerts: true, dailySummary: true, streakAlert: true, goalNudge: true, goalAchieved: true } } });
+
+    await processUser(user, nowAtHour(9));
+
+    expect(sendPush).not.toHaveBeenCalled();
+  });
+
+  it('is idempotent — does not send twice on the same day', async () => {
+    const user = await makeUser();
+
+    await processUser(user, nowAtHour(9));
+    expect(sendPush).toHaveBeenCalledOnce();
+    sendPush.mockClear();
+
+    const fresh = await User.findById(user._id);
+    await processUser(fresh, nowAtHour(9));
+
+    expect(sendPush).not.toHaveBeenCalled();
+  });
+
+  it('yesterday\'s sessions do not suppress today\'s nudge', async () => {
+    const user = await makeUser();
+    await makeSession(user._id, yesterday, { status: 'COMPLETED' });
+
+    await processUser(user, nowAtHour(9));
+
+    expect(sendPush).toHaveBeenCalledOnce();
+  });
+});
 
 // ─── Daily summary ────────────────────────────────────────────────────────────
 

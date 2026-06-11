@@ -31,6 +31,7 @@ const SETTING_VALIDATORS = {
   weeklyGoalMinutes:    v => requireInt(v, { min: 0, max: 10080, field: 'weeklyGoalMinutes' }),
   notificationsEnabled: v => requireBool(v, { field: 'notificationsEnabled' }),
   reminderHour:         v => requireInt(v, { min: 0, max: 23, field: 'reminderHour' }),
+  nudgeHour:            v => requireInt(v, { min: 0, max: 23, field: 'nudgeHour' }),
   timezone: (v) => {
     if (!isValidTimezone(v)) throw badRequest('timezone must be a valid IANA timezone');
     return v;

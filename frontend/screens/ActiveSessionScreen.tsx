@@ -238,16 +238,20 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
     ]).start();
 
   // Total focus seconds = banked runs + the in-flight run (if currently focusing).
+  // A live run never counts past its phase deadline: if the timer expired while
+  // the app was backgrounded/locked, the overshoot until the user comes back is
+  // idle time, not focus — without the cap a 45-min session left to ring would
+  // be recorded with however long it took to return to the app.
+  const liveRunSecs = () => {
+    if (focusRunStartRef.current == null) return 0;
+    const end = Math.min(Date.now(), deadlineRef.current);
+    return Math.max(0, (end - focusRunStartRef.current) / 1000);
+  };
   const commitFocus = () => {
-    if (focusRunStartRef.current != null) {
-      focusAccumRef.current += (Date.now() - focusRunStartRef.current) / 1000;
-      focusRunStartRef.current = null;
-    }
+    focusAccumRef.current += liveRunSecs();
+    focusRunStartRef.current = null;
   };
-  const focusElapsedSecs = () => {
-    const live = focusRunStartRef.current != null ? (Date.now() - focusRunStartRef.current) / 1000 : 0;
-    return Math.round(focusAccumRef.current + live);
-  };
+  const focusElapsedSecs = () => Math.round(focusAccumRef.current + liveRunSecs());
 
   // Catch up the Pomodoro state when one or more phase deadlines passed while
   // backgrounded — a long absence can skip a whole focus+break (or more), not
@@ -259,11 +263,9 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
     if (over <= 0) return false;                 // current phase still running
 
     // The current phase fully elapsed. If it was focus, bank it up to its end
-    // (not up to now — the overflow belongs to later phases) and close the run.
-    if (phaseRef.current === 'focus' && focusRunStartRef.current != null) {
-      focusAccumRef.current += Math.min(FOCUS_SECS, (deadlineRef.current - focusRunStartRef.current) / 1000);
-      focusRunStartRef.current = null;
-    }
+    // (commitFocus caps the run at the deadline — the overflow belongs to later
+    // phases) and close the run.
+    if (phaseRef.current === 'focus') commitFocus();
 
     let p = phaseRef.current;
     let r = roundRef.current;

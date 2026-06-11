@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import User from '../models/User.js';
+import Session from '../models/Session.js';
 import Statistics from '../models/Statistics.js';
 import { sendPush } from '../utils/push.js';
 import { toUserDate, userTodayStr } from '../utils/datetime.js';
@@ -12,11 +13,28 @@ export async function processUser(user, now) {
   const { hour }     = toUserDate(now, tz);
   const today        = userTodayStr(tz);
   const reminderHour = user.settings?.reminderHour ?? 20;
+  const nudgeHour    = user.settings?.nudgeHour    ?? 9;
   const notify       = user.settings?.notify        ?? {};
   const notifyState  = user.notifyState             ?? {};
 
   const dead         = [];
   const stateUpdates = {};
+
+  // ── At nudgeHour (morning): start nudge ───────────────────────────────────
+  // Only when the user hasn't created any session yet that day — a raw Session
+  // check, not Statistics, so an in-progress session also counts as "started".
+  if (hour === nudgeHour && notify.dailyNudge && notifyState.nudgeDateStr !== today) {
+    const hasSessionToday = await Session.exists({ userId: user._id, dateStr: today });
+    if (!hasSessionToday) {
+      const dead2 = await sendPush(user.pushTokens, {
+        title: 'Time to focus 🎯',
+        body:  'Start a session and keep your streak alive.',
+        data:  { type: 'DAILY_NUDGE' },
+      });
+      dead.push(...dead2);
+      stateUpdates['notifyState.nudgeDateStr'] = today;
+    }
+  }
 
   // ── At reminderHour: daily summary + goal-progress nudge ─────────────────
   if (hour === reminderHour) {

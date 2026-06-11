@@ -10,9 +10,13 @@ import { NavProps, UserProfile } from '../App';
 import { DAILY_GOAL_OPTIONS, WEEKLY_GOAL_OPTIONS } from '../store/user';
 import { colors, fontSize, spacing, radii } from '../constants/theme';
 import { apiFetch } from '../api/client';
-import { scheduleDailyNudge, cancelDailyNudge } from '../notifications';
 
 const DURATION_OPTIONS = [15, 25, 30, 45, 60, 90];
+
+function fmtHour(v: number) {
+  const h = v % 12 || 12;
+  return `${h} ${v < 12 ? 'AM' : 'PM'}`;
+}
 
 function ChipRow<T extends string | number>({
   options, active, onSelect, labelOf,
@@ -94,6 +98,7 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
     if (updates.pomodoroEnabled     !== undefined) backendUpdates.defaultTimerMode    = updates.pomodoroEnabled ? 'POMODORO' : 'COUNTDOWN';
     if (updates.notificationsEnabled !== undefined) backendUpdates.notificationsEnabled = updates.notificationsEnabled;
     if (updates.reminderHour         !== undefined) backendUpdates.reminderHour         = updates.reminderHour;
+    if (updates.nudgeHour            !== undefined) backendUpdates.nudgeHour            = updates.nudgeHour;
     if (updates.notify               !== undefined) backendUpdates.notify               = updates.notify;
 
     try {
@@ -176,11 +181,7 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
           label="Notifications"
           desc="Master switch — enables all notification types"
           value={user.notificationsEnabled}
-          onChange={v => {
-            updateAndSync({ notificationsEnabled: v });
-            if (v && user.notify.dailyNudge) scheduleDailyNudge(user.reminderHour);
-            else cancelDailyNudge();
-          }}
+          onChange={v => updateAndSync({ notificationsEnabled: v })}
         />
       </View>
 
@@ -189,14 +190,9 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
         <View style={s.card}>
           <ToggleRow
             label="Daily start nudge"
-            desc="Local reminder at your chosen time each day"
+            desc="Morning reminder — skipped if you've already started a session"
             value={user.notify.dailyNudge}
-            onChange={v => {
-              const notify = { ...user.notify, dailyNudge: v };
-              updateAndSync({ notify });
-              if (v) scheduleDailyNudge(user.reminderHour);
-              else cancelDailyNudge();
-            }}
+            onChange={v => updateAndSync({ notify: { ...user.notify, dailyNudge: v } })}
           />
           <ToggleRow
             label="In-session phase alerts"
@@ -212,7 +208,7 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
           />
           <ToggleRow
             label="Streak at risk"
-            desc="Alert at 9 PM if you haven't focused yet today"
+            desc="Alert an hour after the report time if you haven't focused yet"
             value={user.notify.streakAlert}
             onChange={v => updateAndSync({ notify: { ...user.notify, streakAlert: v } })}
           />
@@ -232,19 +228,26 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
 
         {user.notify.dailyNudge && (
           <View style={s.selectCard}>
-            <Text style={s.rowLabel}>Reminder time</Text>
-            <Text style={s.rowDesc}>Hour of day to receive the daily start nudge</Text>
+            <Text style={s.rowLabel}>Start nudge time</Text>
+            <Text style={s.rowDesc}>Morning hour for the daily start nudge</Text>
+            <ChipRow
+              options={[7, 8, 9, 10, 11, 12] as number[]}
+              active={user.nudgeHour}
+              onSelect={v => updateAndSync({ nudgeHour: v })}
+              labelOf={fmtHour}
+            />
+          </View>
+        )}
+
+        {(user.notify.dailySummary || user.notify.goalNudge || user.notify.streakAlert) && (
+          <View style={s.selectCard}>
+            <Text style={s.rowLabel}>Evening report time</Text>
+            <Text style={s.rowDesc}>Hour for the daily summary and goal progress nudge</Text>
             <ChipRow
               options={[17, 18, 19, 20, 21, 22] as number[]}
               active={user.reminderHour}
-              onSelect={v => {
-                updateAndSync({ reminderHour: v });
-                if (user.notify.dailyNudge) scheduleDailyNudge(v);
-              }}
-              labelOf={v => {
-                const h = v % 12 || 12;
-                return `${h} ${v < 12 ? 'AM' : 'PM'}`;
-              }}
+              onSelect={v => updateAndSync({ reminderHour: v })}
+              labelOf={fmtHour}
             />
           </View>
         )}

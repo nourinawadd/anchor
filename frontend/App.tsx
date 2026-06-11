@@ -24,7 +24,7 @@ import ComingSoonScreen from './screens/ComingSoonScreen';
 import NFCSetupScreen from './screens/NFCSetupScreen';
 import Drawer from './components/Drawer';
 import { apiFetch, loadTokens, logout as clearAuth, setOnAuthExpired } from './api/client';
-import { registerForPush, unregisterPush } from './notifications';
+import { registerForPush, unregisterPush, cancelLegacyDailyNudge } from './notifications';
 import {
   isSupported as screenTimeSupported,
   clearShield as clearScreenTimeShield,
@@ -148,9 +148,13 @@ export default function App() {
 
   // Once authenticated, register this device for push (prompts for permission
   // on first grant, silent thereafter) and hand the token to the backend.
+  // Also clear the legacy on-device daily nudge: it used to be a local
+  // repeating notification, but it now comes from the backend cron (which can
+  // check whether a session already exists that day).
   useEffect(() => {
     if (!token) return;
     registerForPush().catch(console.error);
+    cancelLegacyDailyNudge().catch(() => {});
   }, [token]);
 
   // Handle taps on push notifications — navigate to Dashboard for any type,
@@ -306,6 +310,7 @@ export default function App() {
           pomodoroEnabled:      me.settings?.defaultTimerMode === 'POMODORO',
           notificationsEnabled: me.settings?.notificationsEnabled  ?? true,
           reminderHour:         me.settings?.reminderHour          ?? 20,
+          nudgeHour:            me.settings?.nudgeHour             ?? 9,
           notify: {
             dailyNudge:      me.settings?.notify?.dailyNudge      ?? true,
             inSessionAlerts: me.settings?.notify?.inSessionAlerts ?? true,
