@@ -180,25 +180,38 @@ export default function App() {
       .catch(console.error);
 
     apiFetch<{ name: string; email: string; createdAt?: string; settings: Record<string, any> }>('/user/me', token)
-      .then(me => updateUser({
-        name:                 me.name,
-        email:                me.email,
-        createdAt:            me.createdAt,
-        dailyGoalMinutes:     me.settings?.dailyGoalMinutes     ?? 120,
-        weeklyGoalMinutes:    me.settings?.weeklyGoalMinutes     ?? 600,
-        preferredDuration:    me.settings?.defaultDuration       ?? 25,
-        pomodoroEnabled:      me.settings?.defaultTimerMode === 'POMODORO',
-        notificationsEnabled: me.settings?.notificationsEnabled  ?? true,
-        reminderHour:         me.settings?.reminderHour          ?? 20,
-        notify: {
-          dailyNudge:      me.settings?.notify?.dailyNudge      ?? true,
-          inSessionAlerts: me.settings?.notify?.inSessionAlerts ?? true,
-          dailySummary:    me.settings?.notify?.dailySummary    ?? true,
-          streakAlert:     me.settings?.notify?.streakAlert     ?? true,
-          goalNudge:       me.settings?.notify?.goalNudge       ?? true,
-          goalAchieved:    me.settings?.notify?.goalAchieved    ?? true,
-        },
-      }))
+      .then(me => {
+        updateUser({
+          name:                 me.name,
+          email:                me.email,
+          createdAt:            me.createdAt,
+          dailyGoalMinutes:     me.settings?.dailyGoalMinutes     ?? 120,
+          weeklyGoalMinutes:    me.settings?.weeklyGoalMinutes     ?? 600,
+          preferredDuration:    me.settings?.defaultDuration       ?? 25,
+          pomodoroEnabled:      me.settings?.defaultTimerMode === 'POMODORO',
+          notificationsEnabled: me.settings?.notificationsEnabled  ?? true,
+          reminderHour:         me.settings?.reminderHour          ?? 20,
+          notify: {
+            dailyNudge:      me.settings?.notify?.dailyNudge      ?? true,
+            inSessionAlerts: me.settings?.notify?.inSessionAlerts ?? true,
+            dailySummary:    me.settings?.notify?.dailySummary    ?? true,
+            streakAlert:     me.settings?.notify?.streakAlert     ?? true,
+            goalNudge:       me.settings?.notify?.goalNudge       ?? true,
+            goalAchieved:    me.settings?.notify?.goalAchieved    ?? true,
+          },
+        });
+
+        // Keep the backend's "today" boundary aligned with this device's local
+        // calendar day (used to compute session dateStr) so analytics date-range
+        // queries don't silently exclude sessions logged near midnight.
+        const deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (deviceTz && me.settings?.timezone !== deviceTz) {
+          apiFetch('/user/settings', token, {
+            method: 'PATCH',
+            body: JSON.stringify({ timezone: deviceTz }),
+          }).catch(console.error);
+        }
+      })
       .catch((e: any) => {
         if (e?.status === 401) signOut();
         else console.error(e);
