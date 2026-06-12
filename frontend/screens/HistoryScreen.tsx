@@ -147,7 +147,7 @@ export default function HistoryScreen({ nav }: { nav: NavProps }) {
 
       {/* ── Fixed header ──────────────────────────────────────────────────── */}
       <View style={main.header}>
-        <TouchableOpacity style={main.backBtn} onPress={() => nav.navigate('Dashboard')} activeOpacity={0.7}>
+        <TouchableOpacity style={main.backBtn} onPress={nav.openDrawer} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={24} color={colors.ink} />
         </TouchableOpacity>
         <Text style={main.headerTitle}>Session History</Text>

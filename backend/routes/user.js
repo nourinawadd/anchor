@@ -163,6 +163,25 @@ router.delete('/nfc-tags/:userTagId', asyncHandler(async (req, res) => {
   res.json({ deleted: true });
 }));
 
+// ─── PATCH /api/user/nfc-tags/:userTagId ─────────────────────────────────────
+// Body: { label: string } — renames a registered tag.
+router.patch('/nfc-tags/:userTagId', asyncHandler(async (req, res) => {
+  requireObjectId(req.params.userTagId, { field: 'userTagId' });
+
+  const label = (req.body.label ?? '').trim();
+  if (!label)            return res.status(400).json({ message: 'label is required' });
+  if (label.length > 32) return res.status(400).json({ message: 'label must be at most 32 characters' });
+
+  const updated = await UserTag.findOneAndUpdate(
+    { _id: req.params.userTagId, userId: req.user._id },
+    { $set: { label } },
+    { returnDocument: 'after' },
+  ).populate('tagId');
+
+  if (!updated) return res.status(404).json({ message: 'Tag not found' });
+  res.json(updated);
+}));
+
 // ─── POST /api/user/nfc-verify ────────────────────────────────────────────────
 // Body: { uid: string }
 router.post('/nfc-verify', asyncHandler(async (req, res) => {

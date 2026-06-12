@@ -3,13 +3,14 @@
 // here — never raw fetch(). This module owns the access/refresh token pair
 // (in memory + AsyncStorage) and transparently refreshes a 401'd request once
 // before giving up. Set EXPO_PUBLIC_API_URL in frontend/.env to override the
-// dev URL (required for physical phones — 10.0.2.2 only resolves from the
-// Android emulator).
+// dev URL (this PC's LAN IP, so a physical iPhone on the same Wi-Fi can reach
+// the backend).
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ENV_URL  = process.env.EXPO_PUBLIC_API_URL;
-const DEV_URL  = 'http://10.0.2.2:5000/api';
+// Physical iPhone on the same Wi-Fi reaches the backend at this PC's LAN IP.
+const DEV_URL  = 'http://192.168.1.95:5000/api';
 const PROD_URL = 'https://focus-ecosystem.onrender.com/api';
 
 const BASE = ENV_URL ?? (__DEV__ ? DEV_URL : PROD_URL);

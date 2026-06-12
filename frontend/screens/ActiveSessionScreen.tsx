@@ -7,8 +7,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
 import { toDateStr, fmtHHMM } from '../store/sessions';
 import CircularProgress from '../components/CircularProgress';
-import Card from '../components/Card';
-import PillBadge from '../components/PillBadge';
 import { colors, spacing, radii, fontSize } from '../constants/theme';
 import { apiFetch } from '../api/client';
 import { initNFC, readTag, cancelScan, isNFCSupported } from '../utils/nfc';
@@ -18,6 +16,8 @@ import {
   hasSelection as screenTimeHasSelection,
   applyShield as applyScreenTimeShield,
   clearShield as clearScreenTimeShield,
+  getSelectionSummary,
+  summaryTotal,
 } from 'anchor-screen-time';
 import {
   isSupported as liveActivitySupported,
@@ -26,15 +26,15 @@ import {
   endActivity as endLiveActivity,
 } from 'anchor-live-activity';
 
+// Slate background of the focus screen (matches the dark blue-grey mockup).
+const SLATE      = '#2f4257';
+const RING_TRACK = 'rgba(255,255,255,0.12)';
+const RING_ARC   = 'rgba(255,255,255,0.92)';
+
 function fmt(secs: number) {
   const m = Math.floor(secs / 60).toString().padStart(2, '0');
   const s = (secs % 60).toString().padStart(2, '0');
   return `${m}:${s}`;
-}
-function arcColor(p: number) {
-  if (p > 0.5)  return colors.lime;
-  if (p > 0.25) return colors.amber;
-  return colors.danger;
 }
 
 type NfcModalPhase = 'scanning' | 'unregistered';
@@ -101,6 +101,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   const [running,      setRunning]      = useState(initialState.remaining > 0);
   const [nfcModal,     setNfcModal]     = useState(false);
   const [nfcPhase,     setNfcPhase]     = useState<NfcModalPhase>('scanning');
+  const [stCount,      setStCount]      = useState(0);   // # apps shielded by Screen Time
 
   const startedAt      = useRef(resumeStartedAt ?? new Date());
   const sessionIdRef   = useRef<string | null>(null);
@@ -201,6 +202,12 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
       }
     })();
   }, [phase, round]);
+
+  // How many apps the user has shielded (for the "N apps blocked" card).
+  useEffect(() => {
+    if (!screenTimeSupported()) return;
+    getSelectionSummary().then(s => setStCount(summaryTotal(s))).catch(() => {});
+  }, []);
 
   // Always lift the shield when the screen unmounts (session ended).
   useEffect(() => () => {
@@ -505,13 +512,6 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
     }
   };
 
-  const skipNfcEnd = () => {
-    cancelScan();
-    stopNfcPulse();
-    setNfcModal(false);
-    doEnd(null);
-  };
-
   const dismissNfcModal = () => {
     cancelScan();
     stopNfcPulse();
@@ -519,95 +519,114 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   };
 
   const phaseDuration = phase === 'focus' ? FOCUS_SECS : BREAK_SECS;
-  const progress      = remaining / phaseDuration;
-  const ringColor     = arcColor(progress);
-  const statusLabel   = !running ? 'Paused' : phase === 'break' ? 'Break' : 'Active';
-  const statusColor   = !running ? colors.mutedLight : phase === 'break' ? colors.amber : colors.lime;
+  const progress      = phaseDuration > 0 ? remaining / phaseDuration : 0;
+
+  // Top-right lock indicator: green while focus apps are shielded, otherwise
+  // reflects the paused / break state.
+  const locked    = running && phase === 'focus';
+  const lockLabel = locked ? 'Locked' : !running ? 'Paused' : 'Break';
+  const lockColor = locked ? colors.success : !running ? colors.mutedLight : colors.amber;
+
+  // Meta line under the session name, e.g. "Study · 45 min · Pomodoro 2/3".
+  const categoryName = nav.user.categories?.find(c => c.id === nav.params.categoryId)?.name || 'Focus';
+  const plannedMin   = parseInt(nav.params.plannedDuration ?? '45');
+  const metaLine     = [
+    categoryName,
+    `${plannedMin} min`,
+    isPomo ? `Pomodoro ${round}/${maxRounds}` : 'Countdown',
+  ].join('  ·  ');
+
+  const blockedCount = stCount > 0 ? stCount : blockedApps.length;
+  const hasNfc       = nav.userTags.length > 0;
+
+  // Live distraction-risk read-out — grows with elapsed focus time, like the
+  // server-side scoring heuristic.
+  const riskLevel = !running
+    ? 'PAUSED'
+    : (() => {
+        const d = Math.floor(focusElapsedSecs() / 60 / 20);
+        return d <= 0 ? 'LOW' : d === 1 ? 'MEDIUM' : 'HIGH';
+      })();
 
   return (
     <View style={styles.screen}>
 
       <View style={styles.topBar}>
-        <PillBadge label="FOCUS MODE" bg={colors.darkCard} color={colors.white} caps />
-        <PillBadge label={statusLabel} bg={colors.darkCard} color={statusColor} dot dotColor={statusColor} />
-      </View>
-
-      <Text style={styles.sessionName}>{sessionName}</Text>
-
-      {isPomo && (
-        <View style={styles.pomoRow}>
-          {Array.from({ length: maxRounds }).map((_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.pomoDot,
-                i < round - 1   && styles.pomoDotDone,
-                i === round - 1 && styles.pomoDotActive,
-              ]}
-            />
-          ))}
-          <Text style={styles.pomoLabel}>
-            {phase === 'focus' ? 'Focus' : 'Break'} {round}/{maxRounds}
-          </Text>
+        <Text style={styles.modeLabel}>FOCUS MODE</Text>
+        <View style={styles.lockWrap}>
+          <View style={[styles.lockDot, { backgroundColor: lockColor }]} />
+          <Text style={[styles.lockLabel, { color: lockColor }]}>{lockLabel}</Text>
         </View>
-      )}
-
-      <CircularProgress progress={progress} size={224} strokeWidth={11} color={ringColor} style={styles.ring}>
-        <Animated.Text style={[styles.timerText, { transform: [{ scale: tickAnim }] }]}>
-          {fmt(remaining)}
-        </Animated.Text>
-        <Text style={styles.timerSub}>
-          {remaining === 0 ? 'complete' : phase === 'break' ? 'break' : 'remaining'}
-        </Text>
-      </CircularProgress>
-
-      <View style={styles.controlRow}>
-        <TouchableOpacity
-          style={[styles.ctrlBtn, styles.pauseBtn]}
-          onPress={() => setRunning(r => !r)}
-          activeOpacity={0.75}
-          disabled={remaining === 0}
-        >
-          <View style={styles.btnContent}>
-            <Ionicons name={running ? 'pause' : 'play'} size={15} color={colors.white} />
-            <Text style={styles.pauseText}>{running ? 'Pause' : 'Resume'}</Text>
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.ctrlBtn, styles.endBtn]}
-          onPress={confirmEnd}
-          activeOpacity={0.75}
-        >
-          <View style={styles.btnContent}>
-            <Ionicons name="stop-circle-outline" size={15} color={colors.danger} />
-            <Text style={styles.endText}>End Session</Text>
-          </View>
-        </TouchableOpacity>
       </View>
 
-      <Card dark style={styles.bottomCard} padding={spacing.lg}>
-        {blockedApps.length > 0 && (
-          <>
-            <View style={styles.cardRow}>
-              <Ionicons name="ban-outline" size={26} color={colors.danger} style={styles.cardIcon} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>{blockedApps.length} apps blocked</Text>
-                <Text style={styles.cardSub} numberOfLines={1}>
-                  {blockedApps.slice(0, 3).join(', ')}
-                  {blockedApps.length > 3 ? ` +${blockedApps.length - 3}` : ''}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.divider} />
-          </>
+      <View style={styles.center}>
+        <CircularProgress
+          progress={progress}
+          size={250}
+          strokeWidth={4}
+          color={RING_ARC}
+          trackColor={RING_TRACK}
+          style={styles.ring}
+        >
+          <Animated.Text style={[styles.timerText, { transform: [{ scale: tickAnim }] }]}>
+            {fmt(remaining)}
+          </Animated.Text>
+          <Text style={styles.timerSub}>
+            {remaining === 0 ? 'COMPLETE' : phase === 'break' ? 'BREAK' : 'REMAINING'}
+          </Text>
+        </CircularProgress>
+
+        <Text style={styles.sessionName}>{sessionName}</Text>
+        <Text style={styles.metaLine}>{metaLine}</Text>
+
+        {isPomo && maxRounds > 1 && (
+          <View style={styles.dotsRow}>
+            {Array.from({ length: maxRounds }).map((_, i) => (
+              <View key={i} style={[styles.dot, i < round ? styles.dotFilled : styles.dotEmpty]} />
+            ))}
+          </View>
         )}
-        {nav.userTags.length > 0 && (
-          <TouchableOpacity style={styles.nfcRow} onPress={openNfcEndModal} activeOpacity={0.7}>
-            <Ionicons name="radio-outline" size={20} color={colors.muted} />
-            <Text style={styles.nfcText}>Tap NFC tag to end session</Text>
+      </View>
+
+      <View style={styles.bottom}>
+        <View style={styles.controlRow}>
+          <TouchableOpacity
+            style={styles.pausePill}
+            onPress={() => setRunning(r => !r)}
+            activeOpacity={0.8}
+            disabled={remaining === 0}
+          >
+            <Ionicons name={running ? 'pause' : 'play'} size={13} color={colors.white} />
+            <Text style={styles.pausePillText}>{running ? 'Pause' : 'Resume'}</Text>
           </TouchableOpacity>
-        )}
-      </Card>
+
+          <TouchableOpacity
+            style={styles.stopPill}
+            onPress={() => (hasNfc ? openNfcEndModal() : confirmEnd())}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="stop" size={13} color={colors.danger} />
+            <Text style={styles.stopPillText}>Stop</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.blockedCard}>
+          <Ionicons name="lock-closed-outline" size={18} color={colors.mutedLight} style={styles.blockedIcon} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.blockedTitle}>
+              {blockedCount > 0 ? `${blockedCount} apps blocked` : 'Screen Time shield'}
+            </Text>
+            <Text style={styles.blockedSub}>
+              {hasNfc ? 'NFC tag required to stop' : 'Shielded during focus'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.riskRow}>
+          <Text style={styles.riskLabel}>DISTRACTION RISK</Text>
+          <Text style={styles.riskValue}>{riskLevel}</Text>
+        </View>
+      </View>
 
       {/* NFC end-session modal */}
       <Modal visible={nfcModal} transparent animationType="fade">
@@ -623,13 +642,10 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
                   </View>
                 </View>
                 <Text style={styles.modalTitle}>Hold tag to end session</Text>
-                <Text style={styles.modalSub}>Bring your NFC tag near the top of your iPhone.</Text>
+                <Text style={styles.modalSub}>Scan your registered NFC tag to end this session.</Text>
                 <View style={styles.modalActions}>
                   <TouchableOpacity style={styles.modalCancelBtn} onPress={dismissNfcModal}>
                     <Text style={styles.modalCancelText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.modalSkipBtn} onPress={skipNfcEnd}>
-                    <Text style={styles.modalSkipText}>Skip & End</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -645,11 +661,11 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
                   This tag isn't registered to your account.
                 </Text>
                 <View style={styles.modalActions}>
-                  <TouchableOpacity style={styles.modalCancelBtn} onPress={() => { setNfcPhase('scanning'); openNfcEndModal(); }}>
-                    <Text style={styles.modalCancelText}>Try Again</Text>
+                  <TouchableOpacity style={styles.modalCancelBtn} onPress={dismissNfcModal}>
+                    <Text style={styles.modalCancelText}>Cancel</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.modalSkipBtn} onPress={skipNfcEnd}>
-                    <Text style={styles.modalSkipText}>Skip & End</Text>
+                  <TouchableOpacity style={styles.modalSkipBtn} onPress={() => { setNfcPhase('scanning'); openNfcEndModal(); }}>
+                    <Text style={styles.modalSkipText}>Try Again</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -664,34 +680,58 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1, backgroundColor: colors.darkBg, alignItems: 'center',
+    flex: 1, backgroundColor: SLATE,
     paddingTop: Platform.OS === 'ios' ? 60 : 44,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 28,
+    paddingHorizontal: spacing.xl,
   },
-  topBar:        { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.xxl },
-  sessionName:   { fontSize: fontSize.xxl, fontWeight: '700', color: colors.white, marginBottom: spacing.sm },
-  pomoRow:       { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xl },
-  pomoDot:       { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.darkBorder },
-  pomoDotDone:   { backgroundColor: colors.mutedLight },
-  pomoDotActive: { backgroundColor: colors.lime, width: 10, height: 10, borderRadius: 5 },
-  pomoLabel:     { fontSize: fontSize.xs, fontWeight: '600', color: colors.muted, marginLeft: spacing.xs },
-  ring:          { marginBottom: spacing.xxxl },
-  timerText:     { fontSize: 50, fontWeight: '700', color: colors.white, letterSpacing: -1 },
-  timerSub:      { fontSize: fontSize.sm, color: colors.muted, marginTop: 2 },
-  controlRow:    { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xxl },
-  ctrlBtn:       { borderRadius: radii.md, paddingVertical: 13, paddingHorizontal: spacing.xxl },
-  btnContent:    { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  pauseBtn:      { backgroundColor: colors.darkCardAlt },
-  pauseText:     { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
-  endBtn:        { backgroundColor: '#2e1111' },
-  endText:       { color: colors.danger, fontSize: fontSize.md, fontWeight: '600' },
-  bottomCard:    { marginHorizontal: spacing.xl, alignSelf: 'stretch' },
-  cardRow:       { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
-  cardIcon:      { marginRight: 2 },
-  cardTitle:     { fontSize: fontSize.md, fontWeight: '600', color: colors.white },
-  cardSub:       { fontSize: fontSize.sm, color: colors.muted, marginTop: 2 },
-  divider:       { height: 1, backgroundColor: colors.darkBorder, marginVertical: spacing.md },
-  nfcRow:        { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  nfcText:       { fontSize: fontSize.sm, color: colors.muted },
+
+  topBar:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  modeLabel:  { fontSize: fontSize.xs, fontWeight: '600', color: 'rgba(255,255,255,0.55)', letterSpacing: 1.5 },
+  lockWrap:   { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  lockDot:    { width: 7, height: 7, borderRadius: 4 },
+  lockLabel:  { fontSize: fontSize.sm, fontWeight: '500' },
+
+  center:     { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  ring:       { marginBottom: spacing.xxxl },
+  timerText:  { fontSize: 52, fontWeight: '700', color: colors.white, letterSpacing: 1 },
+  timerSub:   { fontSize: fontSize.xs, color: 'rgba(255,255,255,0.5)', letterSpacing: 2, marginTop: 6 },
+
+  sessionName:{ fontSize: fontSize.xxl, fontWeight: '700', color: colors.white, marginTop: spacing.xs },
+  metaLine:   { fontSize: fontSize.sm, color: 'rgba(255,255,255,0.55)', marginTop: spacing.sm },
+
+  dotsRow:    { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.lg },
+  dot:        { width: 9, height: 9, borderRadius: 5 },
+  dotFilled:  { backgroundColor: colors.white },
+  dotEmpty:   { borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.35)' },
+
+  bottom:     { alignSelf: 'stretch' },
+  controlRow: { flexDirection: 'row', justifyContent: 'center', gap: spacing.md, marginBottom: spacing.xl },
+  pausePill:  {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingVertical: 9, paddingHorizontal: spacing.xl,
+    borderRadius: radii.full, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+  },
+  pausePillText: { color: colors.white, fontSize: fontSize.sm, fontWeight: '600' },
+  stopPill:  {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingVertical: 9, paddingHorizontal: spacing.xl,
+    borderRadius: radii.full, borderWidth: 1, borderColor: 'rgba(255,90,90,0.4)',
+  },
+  stopPillText: { color: colors.danger, fontSize: fontSize.sm, fontWeight: '600' },
+
+  blockedCard: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', borderRadius: radii.lg,
+    paddingVertical: spacing.lg, paddingHorizontal: spacing.lg,
+  },
+  blockedIcon:  { marginRight: spacing.md },
+  blockedTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.white },
+  blockedSub:   { fontSize: fontSize.sm, color: 'rgba(255,255,255,0.5)', marginTop: 3 },
+
+  riskRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xl },
+  riskLabel: { fontSize: fontSize.xs, fontWeight: '600', color: 'rgba(255,255,255,0.45)', letterSpacing: 1.2 },
+  riskValue: { fontSize: fontSize.xs, fontWeight: '700', color: 'rgba(255,255,255,0.7)', letterSpacing: 1.2 },
 
   // NFC end modal
   modalOverlay: {

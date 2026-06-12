@@ -254,7 +254,7 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
       </>)}
 
       <Text style={s.sectionLabel}>CONNECTED HARDWARE</Text>
-      <TouchableOpacity style={s.card} onPress={() => nav.navigate('NFCSetup')} activeOpacity={0.75}>
+      <TouchableOpacity style={s.card} onPress={() => nav.navigate('NFCSetup', { from: 'Settings' })} activeOpacity={0.75}>
         <View style={s.linkRow}>
           <View style={s.rowInfo}>
             <Text style={s.rowLabel}>NFC Tags</Text>

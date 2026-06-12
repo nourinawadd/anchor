@@ -1,11 +1,34 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Alert } from 'react-native';
 import { NavProps } from '../App';
+import { apiFetch } from '../api/client';
 import { computeFocusHours, computeLongestStreak } from '../store/sessions';
 
 export default function ProfileScreen({ nav }: { nav: NavProps }) {
   const { user, sessions } = nav;
   const initial = user.name.charAt(0).toUpperCase();
+
+  const deleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This permanently deletes your account and all your data. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiFetch('/user/me', nav.token, { method: 'DELETE' });
+              nav.signOut();
+            } catch (e: any) {
+              Alert.alert('Error', e?.message ?? 'Failed to delete account. Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const totalSessions  = sessions.length;
   const focusHours     = computeFocusHours(sessions);
@@ -81,6 +104,11 @@ export default function ProfileScreen({ nav }: { nav: NavProps }) {
         <Text style={styles.logoutText}>Log Out</Text>
       </TouchableOpacity>
 
+      {/* Delete account */}
+      <TouchableOpacity style={styles.deleteBtn} onPress={deleteAccount}>
+        <Text style={styles.deleteText}>Delete Account</Text>
+      </TouchableOpacity>
+
     </ScrollView>
   );
 }
@@ -120,4 +148,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: '#e53935', backgroundColor: '#fff',
   },
   logoutText: { color: '#e53935', fontSize: 16, fontWeight: '600' },
+  deleteBtn: { alignItems: 'center', paddingVertical: 16, marginTop: 6 },
+  deleteText: { color: '#e53935', fontSize: 14, fontWeight: '600' },
 });

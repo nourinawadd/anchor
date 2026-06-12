@@ -109,11 +109,6 @@ export default function NFCScreen({ nav }: { nav: NavProps }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const skip = () => {
-    cancelScan();
-    nav.navigate('ActiveSession', nav.params);
-  };
-
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
@@ -178,7 +173,7 @@ export default function NFCScreen({ nav }: { nav: NavProps }) {
               <TouchableOpacity style={styles.retryBtn} onPress={startScan}>
                 <Text style={styles.retryBtnText}>Try Again</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.setupBtn} onPress={() => { cancelScan(); nav.navigate('NFCSetup'); }}>
+              <TouchableOpacity style={styles.setupBtn} onPress={() => { cancelScan(); nav.navigate('NFCSetup', { from: 'CreateSession' }); }}>
                 <Text style={styles.setupBtnText}>Set Up Tags</Text>
               </TouchableOpacity>
             </View>
@@ -199,11 +194,6 @@ export default function NFCScreen({ nav }: { nav: NavProps }) {
         )}
       </View>
 
-      {(phase === 'scanning' || phase === 'unregistered' || phase === 'error') && (
-        <TouchableOpacity style={styles.skipBtn} onPress={skip}>
-          <Text style={styles.skipText}>Start without NFC</Text>
-        </TouchableOpacity>
-      )}
     </View>
   );
 }

@@ -11,11 +11,30 @@ import { colors, spacing, radii, fontSize } from '../constants/theme';
 
 type ScanPhase = 'idle' | 'scanning' | 'naming' | 'saving';
 
+// Dark slate of the "Register New Tag" button, matching the mockup.
+const SLATE = '#3a5568';
+
 export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
   const [scanPhase, setScanPhase]   = useState<ScanPhase>('idle');
   const [scannedUid, setScannedUid] = useState('');
   const [labelInput, setLabelInput] = useState('');
   const [nfcReady,   setNfcReady]   = useState(false);
+
+  // Edit (rename / view id / remove) sheet state.
+  const [editTag,   setEditTag]   = useState<UserTag | null>(null);
+  const [editLabel, setEditLabel] = useState('');
+  const [editBusy,  setEditBusy]  = useState(false);
+
+  // Where Back returns, by where the screen was opened from:
+  //   • New Session ("Add an NFC tag") → New Session (also after a successful save)
+  //   • Settings                       → Settings
+  //   • the drawer (or anywhere else)  → reopen the drawer menu
+  const cameFromNewSession = nav.params.from === 'CreateSession';
+  const handleBack = () => {
+    if (cameFromNewSession)            nav.navigate('CreateSession');
+    else if (nav.params.from === 'Settings') nav.navigate('Settings');
+    else                               nav.openDrawer();
+  };
 
   // Pulsing ring animation for the scan modal
   const pulse1  = useRef(new Animated.Value(1)).current;
@@ -107,9 +126,40 @@ export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
       setScanPhase('idle');
       setScannedUid('');
       setLabelInput('');
+      if (cameFromNewSession) nav.navigate('CreateSession');
     } catch (e: any) {
       setScanPhase('naming');
       Alert.alert('Error', e?.message ?? 'Failed to save tag. Try again.');
+    }
+  };
+
+  // ── Edit sheet ──────────────────────────────────────────────────────────────
+  const openEdit = (tag: UserTag) => {
+    setEditTag(tag);
+    setEditLabel(tag.label);
+  };
+
+  const closeEdit = () => {
+    setEditTag(null);
+    setEditLabel('');
+    setEditBusy(false);
+  };
+
+  const saveRename = async () => {
+    if (!editTag) return;
+    const label = editLabel.trim();
+    if (!label || label === editTag.label) { closeEdit(); return; }
+    setEditBusy(true);
+    try {
+      await apiFetch(`/user/nfc-tags/${editTag._id}`, nav.token, {
+        method: 'PATCH',
+        body: JSON.stringify({ label }),
+      });
+      nav.refreshTags();
+      closeEdit();
+    } catch (e: any) {
+      setEditBusy(false);
+      Alert.alert('Error', e?.message ?? 'Failed to rename tag.');
     }
   };
 
@@ -126,6 +176,7 @@ export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
             try {
               await apiFetch(`/user/nfc-tags/${tag._id}`, nav.token, { method: 'DELETE' });
               nav.refreshTags();
+              closeEdit();
             } catch (e: any) {
               Alert.alert('Error', e?.message ?? 'Failed to remove tag.');
             }
@@ -136,66 +187,58 @@ export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
   };
 
   const formatUid = (uid: string) =>
-    uid.length > 17 ? uid.slice(0, 14) + '…' : uid;
+    uid.length > 14 ? uid.slice(0, 11) + '…' : uid;
 
   return (
     <View style={s.screen}>
       <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} onPress={() => nav.navigate('Settings')}>
-          <Ionicons name="arrow-back" size={24} color={colors.ink} />
+        <TouchableOpacity style={s.backBtn} onPress={handleBack} hitSlop={8}>
+          <Ionicons name="arrow-back" size={20} color={colors.ink} />
         </TouchableOpacity>
-        <Text style={s.title}>NFC Tags</Text>
-        <View style={s.headerSpacer} />
+        <Text style={s.title}>Hardware Setup</Text>
       </View>
 
       <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
-        <Text style={s.sectionLabel}>YOUR TAGS</Text>
+        <Text style={s.sectionLabel}>REGISTERED TAGS</Text>
 
         {nav.userTags.length === 0 ? (
           <View style={s.emptyCard}>
             <Ionicons name="radio-outline" size={36} color={colors.muted} />
             <Text style={s.emptyTitle}>No tags yet</Text>
             <Text style={s.emptyDesc}>
-              Add an NFC tag to verify your physical presence at your focus location.
+              Register an NFC tag to verify your physical presence at your focus location.
             </Text>
           </View>
         ) : (
           nav.userTags.map(tag => (
-            <View key={tag._id} style={s.tagCard}>
+            <TouchableOpacity key={tag._id} style={s.tagCard} onPress={() => openEdit(tag)} activeOpacity={0.7}>
               <View style={s.tagIcon}>
-                <Ionicons name="radio-outline" size={22} color={colors.ink} />
+                <Ionicons name="radio-outline" size={20} color={colors.ink} />
               </View>
               <View style={s.tagInfo}>
                 <Text style={s.tagLabel}>{tag.label}</Text>
                 <Text style={s.tagUid}>{formatUid(tag.tagId.uid)}</Text>
               </View>
-              <TouchableOpacity onPress={() => deleteTag(tag)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-                <Ionicons name="trash-outline" size={18} color={colors.danger} />
-              </TouchableOpacity>
-            </View>
+              <Ionicons name="checkmark" size={18} color={colors.mutedLight} />
+            </TouchableOpacity>
           ))
         )}
-
-        <TouchableOpacity
-          style={[s.addBtn, !nfcReady && s.addBtnDisabled]}
-          onPress={openScanModal}
-          activeOpacity={0.8}
-          disabled={!nfcReady}
-        >
-          <Ionicons name="add-circle-outline" size={20} color={nfcReady ? colors.white : colors.muted} />
-          <Text style={[s.addBtnText, !nfcReady && s.addBtnTextDisabled]}>
-            {nfcReady ? 'Add NFC Tag' : 'NFC Not Available'}
-          </Text>
-        </TouchableOpacity>
-
-        <Text style={s.hint}>
-          Hold your NFC tag or card near the top of your iPhone to scan it.
-        </Text>
-
-        <View style={{ height: 48 }} />
       </ScrollView>
 
-      {/* Scan / Name modal */}
+      <View style={s.footer}>
+        <TouchableOpacity
+          style={[s.registerBtn, !nfcReady && s.registerBtnDisabled]}
+          onPress={openScanModal}
+          activeOpacity={0.85}
+          disabled={!nfcReady}
+        >
+          <Text style={s.registerBtnText}>
+            {nfcReady ? 'Register New Tag' : 'NFC Not Available'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Scan / Name modal (register a new tag) */}
       <Modal visible={scanPhase !== 'idle'} transparent animationType="fade">
         <View style={s.modalOverlay}>
           <View style={s.modalCard}>
@@ -223,6 +266,10 @@ export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
                 </View>
                 <Text style={s.modalTitle}>Tag Detected</Text>
                 <Text style={s.modalSub}>Give this tag a name so you can identify it later.</Text>
+                <View style={s.idBox}>
+                  <Text style={s.idBoxLabel}>NFC ID</Text>
+                  <Text style={s.idBoxValue}>{scannedUid}</Text>
+                </View>
                 <TextInput
                   style={s.labelInput}
                   placeholder="e.g. Desk Tag, Library"
@@ -258,6 +305,57 @@ export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
           </View>
         </View>
       </Modal>
+
+      {/* Edit modal (rename / view id / remove) */}
+      <Modal visible={editTag !== null} transparent animationType="fade" onRequestClose={closeEdit}>
+        <View style={s.modalOverlay}>
+          <View style={s.modalCard}>
+            <Text style={s.modalTitle}>Edit Tag</Text>
+
+            <View style={s.idBox}>
+              <Text style={s.idBoxLabel}>NFC ID</Text>
+              <Text style={s.idBoxValue}>{editTag?.tagId.uid}</Text>
+            </View>
+
+            <Text style={s.fieldLabel}>TAG NAME</Text>
+            <TextInput
+              style={s.labelInput}
+              placeholder="Tag name"
+              placeholderTextColor={colors.muted}
+              value={editLabel}
+              onChangeText={setEditLabel}
+              maxLength={32}
+              returnKeyType="done"
+              onSubmitEditing={saveRename}
+              editable={!editBusy}
+            />
+
+            <View style={s.modalActions}>
+              <TouchableOpacity style={s.cancelBtn} onPress={closeEdit} disabled={editBusy}>
+                <Text style={s.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.saveBtn, (!editLabel.trim() || editBusy) && s.saveBtnDisabled]}
+                onPress={saveRename}
+                disabled={!editLabel.trim() || editBusy}
+              >
+                {editBusy
+                  ? <ActivityIndicator size="small" color={colors.white} />
+                  : <Text style={s.saveBtnText}>Save</Text>}
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={s.removeBtn}
+              onPress={() => editTag && deleteTag(editTag)}
+              disabled={editBusy}
+            >
+              <Ionicons name="trash-outline" size={16} color={colors.danger} />
+              <Text style={s.removeBtnText}>Remove Tag</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -265,16 +363,20 @@ export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
 const s = StyleSheet.create({
   screen:  { flex: 1, backgroundColor: colors.bg },
   header:  {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
     paddingHorizontal: spacing.xl,
     paddingTop: Platform.OS === 'ios' ? 60 : 44,
-    paddingBottom: spacing.md, backgroundColor: colors.bg,
+    paddingBottom: spacing.lg,
   },
-  backBtn:      { width: 40, height: 40, justifyContent: 'center' },
-  title:        { fontSize: fontSize.xl, fontWeight: '700', color: colors.ink },
-  headerSpacer: { width: 40 },
-  body:         { paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
-  sectionLabel: { fontSize: 11, fontWeight: '700', color: colors.muted, letterSpacing: 1.2, marginBottom: 12, marginTop: 4 },
+  backBtn: {
+    width: 38, height: 38, borderRadius: 19,
+    borderWidth: 1, borderColor: colors.border,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card,
+  },
+  title:   { fontSize: fontSize.xl, fontWeight: '700', color: colors.ink },
+
+  body:         { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.xl },
+  sectionLabel: { fontSize: 11, fontWeight: '700', color: colors.muted, letterSpacing: 1.2, marginBottom: 12 },
 
   emptyCard: {
     alignItems: 'center', paddingVertical: 40, paddingHorizontal: 24,
@@ -287,28 +389,30 @@ const s = StyleSheet.create({
   tagCard: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: colors.card, borderRadius: radii.lg,
-    padding: spacing.lg, marginBottom: spacing.md,
+    borderWidth: 1, borderColor: colors.border,
+    padding: spacing.md, marginBottom: spacing.md,
     gap: spacing.md,
-    shadowColor: colors.black, shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
   },
   tagIcon: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center',
+    width: 38, height: 38, borderRadius: radii.sm,
+    borderWidth: 1, borderColor: colors.border,
+    alignItems: 'center', justifyContent: 'center',
   },
   tagInfo:  { flex: 1 },
-  tagLabel: { fontSize: fontSize.md, fontWeight: '600', color: colors.ink },
-  tagUid:   { fontSize: fontSize.xs + 1, color: colors.muted, marginTop: 2, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  tagLabel: { fontSize: fontSize.md, fontWeight: '700', color: colors.ink },
+  tagUid:   { fontSize: fontSize.xs + 1, color: colors.muted, marginTop: 3, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
 
-  addBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: colors.ink, borderRadius: radii.lg,
-    paddingVertical: 16, gap: 8, marginTop: spacing.md,
+  footer: {
+    paddingHorizontal: spacing.xl,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    paddingTop: spacing.md,
   },
-  addBtnDisabled:     { backgroundColor: colors.border },
-  addBtnText:         { fontSize: fontSize.md, fontWeight: '700', color: colors.white },
-  addBtnTextDisabled: { color: colors.muted },
-  hint: { fontSize: fontSize.xs + 1, color: colors.muted, textAlign: 'center', marginTop: spacing.lg, lineHeight: 18 },
+  registerBtn: {
+    backgroundColor: SLATE, borderRadius: radii.lg,
+    paddingVertical: 18, alignItems: 'center',
+  },
+  registerBtnDisabled: { backgroundColor: colors.border },
+  registerBtnText:     { fontSize: fontSize.md, fontWeight: '700', color: colors.white },
 
   // Modal
   modalOverlay: {
@@ -334,6 +438,15 @@ const s = StyleSheet.create({
   successIcon:   { marginBottom: 16 },
   modalTitle:    { fontSize: fontSize.xl - 1, fontWeight: '700', color: colors.ink, marginBottom: 8, textAlign: 'center' },
   modalSub:      { fontSize: fontSize.sm, color: colors.muted, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
+
+  idBox: {
+    width: '100%', backgroundColor: colors.bg, borderRadius: radii.md,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm, marginBottom: spacing.lg,
+  },
+  idBoxLabel: { fontSize: 10, fontWeight: '700', color: colors.muted, letterSpacing: 1 },
+  idBoxValue: { fontSize: fontSize.sm, color: colors.ink, marginTop: 3, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+
+  fieldLabel: { alignSelf: 'flex-start', fontSize: 10, fontWeight: '700', color: colors.muted, letterSpacing: 1, marginBottom: 6 },
   labelInput: {
     width: '100%', borderWidth: 1.5, borderColor: colors.border,
     borderRadius: radii.md, paddingHorizontal: spacing.md, paddingVertical: 12,
@@ -342,7 +455,10 @@ const s = StyleSheet.create({
   modalActions: { flexDirection: 'row', gap: 12, width: '100%' },
   cancelBtn:    { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: radii.md, backgroundColor: colors.border },
   cancelBtnText: { fontSize: fontSize.md, fontWeight: '600', color: colors.inkSoft },
-  saveBtn:      { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: radii.md, backgroundColor: colors.ink },
+  saveBtn:      { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: radii.md, backgroundColor: colors.ink },
   saveBtnDisabled: { backgroundColor: colors.border },
   saveBtnText:  { fontSize: fontSize.md, fontWeight: '700', color: colors.white },
+
+  removeBtn:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.lg, paddingVertical: 6 },
+  removeBtnText: { fontSize: fontSize.sm, fontWeight: '600', color: colors.danger },
 });

@@ -61,11 +61,16 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.focusDay}>{focusDay}</Text>
-          <Text style={styles.dashTitle}>Dashboard</Text>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity style={styles.menuBtn} onPress={nav.openDrawer} hitSlop={8}>
+            <Ionicons name="menu" size={26} color={colors.ink} />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.focusDay}>{focusDay}</Text>
+            <Text style={styles.dashTitle}>Dashboard</Text>
+          </View>
         </View>
-        <TouchableOpacity style={styles.avatar} onPress={nav.openDrawer}>
+        <TouchableOpacity style={styles.avatar} onPress={() => nav.navigate('Profile')}>
           <Text style={styles.avatarText}>{initial}</Text>
         </TouchableOpacity>
       </View>
@@ -164,6 +169,8 @@ const styles = StyleSheet.create({
   container:  { padding: spacing.xl, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 52 },
 
   header:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xl },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  menuBtn:   { width: 38, height: 38, marginLeft: -6, justifyContent: 'center', alignItems: 'center' },
   focusDay:  { fontSize: fontSize.xs, fontWeight: '600', color: colors.muted, letterSpacing: 1.5, marginBottom: 2 },
   dashTitle: { fontSize: fontSize.xxxl, fontWeight: 'bold', color: colors.ink },
   avatar:    { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.ink, justifyContent: 'center', alignItems: 'center' },

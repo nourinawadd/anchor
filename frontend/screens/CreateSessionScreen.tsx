@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
 import Card from '../components/Card';
 import SectionLabel from '../components/SectionLabel';
+import WheelPicker from '../components/WheelPicker';
 import { colors, spacing, radii, fontSize } from '../constants/theme';
 import { apiFetch } from '../api/client';
 import { SessionCategory } from '../store/user';
@@ -25,7 +26,8 @@ import {
 } from 'anchor-screen-time';
 
 const DURATIONS = [15, 25, 30, 45, 60, 90];
-const APPS = ['Instagram', 'Twitter', 'TikTok', 'YouTube', 'Reddit', 'Snapchat', 'Discord', 'Games'];
+const HOURS   = Array.from({ length: 9 },  (_, i) => i);   // 0–8 hours
+const MINUTES = Array.from({ length: 60 }, (_, i) => i);   // 0–59 min
 
 const POMO_PRESETS = [
   { label: '25 / 5',  work: 25, brk: 5  },
@@ -50,8 +52,6 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
   const [pomodoro,   setPomodoro]   = useState(() => nav.user.pomodoroEnabled);
   const [pomoPreset, setPomoPreset] = useState<PomoPreset>(POMO_PRESETS[0]);
   const [pomoRounds, setPomoRounds] = useState(2);
-  const [blockedApps, setBlockedApps] = useState<string[]>(['Instagram', 'Twitter', 'TikTok', 'YouTube', 'Reddit']);
-  const [showAllApps, setShowAllApps] = useState(false);
   const [stSummary, setStSummary]   = useState<ScreenTimeSelectionSummary | null>(null);
   const [stStatus,  setStStatus]    = useState<ScreenTimeAuthStatus>('notDetermined');
   const [stBusy,    setStBusy]      = useState(false);
@@ -230,10 +230,6 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
     }
   };
 
-  const toggleApp = (app: string) =>
-    setBlockedApps(prev => prev.includes(app) ? prev.filter(a => a !== app) : [...prev, app]);
-
-  const visibleApps = showAllApps ? APPS : APPS.slice(0, 5);
   const pomoDuration = pomoPreset.work * pomoRounds;
 
   const startParams = selectedCategory ? {
@@ -244,14 +240,14 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
     pomodoro:      String(pomodoro),
     pomodoroWork:  String(pomoPreset.work),
     pomodoroBreak: String(pomoPreset.brk),
-    blockedApps:   blockedApps.join(','),
+    blockedApps:   '',
   } : null;
 
   if (screenState === 'category-select') {
     return (
       <View style={styles.screen}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => nav.navigate('Dashboard')}>
+          <TouchableOpacity style={styles.backBtn} onPress={nav.openDrawer}>
             <Ionicons name="arrow-back" size={24} color={colors.ink} />
           </TouchableOpacity>
           <Text style={styles.title}>Session Categories</Text>
@@ -398,20 +394,21 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
         {!pomodoro ? (
           <>
             <SectionLabel>Duration</SectionLabel>
-            <Text style={styles.durationBig}>
-              {duration} <Text style={styles.durationUnit}>min</Text>
-            </Text>
-            <View style={styles.durationRow}>
-              {DURATIONS.map(d => (
-                <TouchableOpacity
-                  key={d}
-                  style={[styles.durationChip, duration === d && styles.durationChipActive]}
-                  onPress={() => setDuration(d)}
-                  activeOpacity={0.75}
-                >
-                  <Text style={[styles.durationChipText, duration === d && styles.durationChipTextActive]}>{d}</Text>
-                </TouchableOpacity>
-              ))}
+            <View style={styles.wheelRow}>
+              <WheelPicker
+                values={HOURS}
+                selectedValue={Math.floor(duration / 60)}
+                unit="hours"
+                width={150}
+                onChange={h => setDuration(h * 60 + (duration % 60))}
+              />
+              <WheelPicker
+                values={MINUTES}
+                selectedValue={duration % 60}
+                unit="min"
+                width={150}
+                onChange={m => setDuration(Math.floor(duration / 60) * 60 + m)}
+              />
             </View>
           </>
         ) : (
@@ -466,26 +463,6 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
           <Switch value={pomodoro} onValueChange={setPomodoro} trackColor={{ true: colors.ink }} thumbColor={colors.white} />
         </Card>
 
-        {/* Block Apps */}
-        <SectionLabel>Block Apps</SectionLabel>
-        <View style={styles.appsWrap}>
-          {visibleApps.map(app => (
-            <TouchableOpacity
-              key={app}
-              style={[styles.appChip, blockedApps.includes(app) && styles.appChipActive]}
-              onPress={() => toggleApp(app)}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.appChipText, blockedApps.includes(app) && styles.appChipTextActive]}>{app}</Text>
-            </TouchableOpacity>
-          ))}
-          {!showAllApps && (
-            <TouchableOpacity style={styles.appChip} onPress={() => setShowAllApps(true)}>
-              <Text style={styles.appChipText}>+{APPS.length - 5} more</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
         {/* Screen Time real blocking (iOS only) */}
         {screenTimeSupported() && (
           <>
@@ -514,24 +491,16 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
           </>
         )}
 
-        {/* Actions */}
+        {/* Actions — with a registered tag, NFC is required to start (and end);
+            without one, the session starts and ends with no taps. */}
         {nav.userTags.length > 0 ? (
-          <>
-            <TouchableOpacity
-              style={styles.nfcBtn}
-              onPress={() => startParams && nav.navigate('NFCScan', startParams)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.nfcBtnText}>Scan NFC Tag to Start</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.skipBtn}
-              onPress={() => startParams && nav.navigate('ActiveSession', startParams)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.skipBtnText}>Start Without NFC</Text>
-            </TouchableOpacity>
-          </>
+          <TouchableOpacity
+            style={styles.nfcBtn}
+            onPress={() => startParams && nav.navigate('NFCScan', startParams)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.nfcBtnText}>Start with NFC</Text>
+          </TouchableOpacity>
         ) : (
           <>
             <TouchableOpacity
@@ -539,10 +508,10 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
               onPress={() => startParams && nav.navigate('ActiveSession', startParams)}
               activeOpacity={0.8}
             >
-              <Text style={styles.nfcBtnText}>Start Session</Text>
+              <Text style={styles.nfcBtnText}>Start</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.skipBtn} onPress={() => nav.navigate('NFCSetup')} activeOpacity={0.7}>
-              <Text style={styles.skipBtnText}>Set up NFC tags</Text>
+            <TouchableOpacity style={styles.skipBtn} onPress={() => nav.navigate('NFCSetup', { from: 'CreateSession' })} activeOpacity={0.7}>
+              <Text style={styles.skipBtnText}>Add an NFC tag</Text>
             </TouchableOpacity>
           </>
         )}
@@ -643,6 +612,7 @@ const styles = StyleSheet.create({
 
   durationBig:  { fontSize: 60, fontWeight: '700', color: colors.ink, textAlign: 'center', marginVertical: 6 },
   durationUnit: { fontSize: 22, fontWeight: '400', color: colors.muted },
+  wheelRow:     { flexDirection: 'row', justifyContent: 'center', marginVertical: spacing.sm },
   durationRow:  { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm + 2, justifyContent: 'center', marginBottom: spacing.xs },
   durationChip:           { paddingVertical: spacing.sm, paddingHorizontal: 18, borderRadius: radii.full, backgroundColor: colors.border },
   durationChipActive:     { backgroundColor: colors.ink },
@@ -653,12 +623,6 @@ const styles = StyleSheet.create({
   toggleInfo: { flex: 1 },
   toggleTitle: { fontSize: fontSize.lg - 1, fontWeight: '600', color: colors.ink },
   toggleSub:   { fontSize: fontSize.sm, color: colors.muted, marginTop: 2 },
-
-  appsWrap:         { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm + 2 },
-  appChip:          { paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radii.full, backgroundColor: colors.border },
-  appChipActive:    { backgroundColor: colors.ink },
-  appChipText:      { fontSize: fontSize.sm, fontWeight: '500', color: colors.inkSoft },
-  appChipTextActive: { color: colors.white },
 
   stCard:    {
     flexDirection: 'row', alignItems: 'center',

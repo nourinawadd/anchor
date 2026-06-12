@@ -82,7 +82,7 @@ export default function Drawer({ isOpen, onClose, currentScreen, nav, onSignOut 
               <TouchableOpacity
                 key={item.screen}
                 style={[styles.navItem, active && styles.navItemActive]}
-                onPress={() => nav.navigate(item.screen)}
+                onPress={() => nav.navigate(item.screen, { from: 'drawer' })}
                 activeOpacity={0.7}
               >
                 <Text style={[styles.navLabel, active && styles.navLabelActive]}>
