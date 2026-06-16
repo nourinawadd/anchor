@@ -6,9 +6,10 @@ import Card from '../components/Card';
 import SectionLabel from '../components/SectionLabel';
 import PillBadge from '../components/PillBadge';
 import { colors, spacing, fontSize, radii } from '../constants/theme';
-import { computeStreak, computeFocusHours, computeTodayScore, computeDailyProgress, toDateStr } from '../store/sessions';
+import { computeStreak, computeFocusHours, computeTodayScore, computeDailyProgress, toDateStr, fmtHHMM } from '../store/sessions';
 import { apiFetch } from '../api/client';
 import type { SessionRecord } from '../App';
+import { isCalendarSyncEnabled, getTodayEvents, type CalendarEvent } from '../utils/calendar';
 
 const DAYS = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
 
@@ -30,6 +31,16 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
   const name     = user.name !== 'User' ? user.name : (nav.params.name ?? 'User');
   const initial  = name.charAt(0).toUpperCase();
   const focusDay = `FOCUS ${DAYS[new Date().getDay()]}`;
+
+  // ── Today's Schedule (from iOS Calendar, if sync enabled) ───────────────────
+  const [todayEvents, setTodayEvents] = useState<CalendarEvent[] | null>(null);
+
+  useEffect(() => {
+    isCalendarSyncEnabled().then(enabled => {
+      if (!enabled) { setTodayEvents(null); return; }
+      getTodayEvents().then(setTodayEvents);
+    });
+  }, []);
 
   // ── AI suggestion (with local fallback) ─────────────────────────────────────
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
@@ -128,6 +139,25 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
         </View>
       </Card>
 
+      {/* ── Today's Schedule (from iOS Calendar, if sync enabled) ──────────── */}
+      {todayEvents !== null && (
+        <Card style={styles.mb14} padding={18}>
+          <SectionLabel noTopMargin>Today's Schedule</SectionLabel>
+          {todayEvents.length === 0 ? (
+            <Text style={styles.scheduleEmpty}>No events today.</Text>
+          ) : (
+            todayEvents.map((ev, i) => (
+              <View key={i} style={styles.scheduleRow}>
+                <Text style={styles.scheduleTime}>
+                  {fmtHHMM(ev.startDate)}–{fmtHHMM(ev.endDate)}
+                </Text>
+                <Text style={styles.scheduleTitle} numberOfLines={1}>{ev.title}</Text>
+              </View>
+            ))
+          )}
+        </Card>
+      )}
+
       {/* ── Smart Suggestion (AI-powered, with local fallback) ─────────────── */}
       <TouchableOpacity activeOpacity={0.85} onPress={() => nav.navigate('AIInsights')}>
         <Card style={styles.mb14} padding={18}>
@@ -198,6 +228,11 @@ const styles = StyleSheet.create({
   sessionRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sessionTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.ink, marginBottom: 4 },
   sessionSub:   { fontSize: fontSize.sm, color: colors.muted },
+
+  scheduleEmpty: { fontSize: fontSize.sm, color: colors.muted },
+  scheduleRow:   { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 4 },
+  scheduleTime:  { fontSize: fontSize.sm, fontWeight: '600', color: colors.ink, width: 100 },
+  scheduleTitle: { fontSize: fontSize.sm, color: colors.inkSoft, flex: 1 },
   suggestionHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 10 },
   suggestionLabelOverride: { marginTop: 0, marginBottom: 0 },
   suggestionText: { fontSize: fontSize.sm + 1, color: colors.inkSoft, lineHeight: 22 },
