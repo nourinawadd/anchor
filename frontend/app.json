@@ -22,7 +22,7 @@
         "NSSupportsLiveActivities": true,
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "40",
+      "buildNumber": "41",
       "usesAppleSignIn": true,
       "entitlements": {
         "com.apple.developer.family-controls": true
@@ -53,7 +53,8 @@
       [
         "react-native-nfc-manager",
         {
-          "nfcPermission": "Anchor uses NFC to verify your physical presence at your focus location during sessions."
+          "nfcPermission": "Anchor uses NFC to verify your physical presence at your focus location during sessions.",
+          "includeNdefEntitlement": false
         }
       ],
       [
