@@ -53,7 +53,7 @@ export default function SignUpScreen({ nav }: { nav: NavProps }) {
       };
       await setTokens({ accessToken, refreshToken });
       nav.setToken(accessToken);
-      nav.updateUser({ name: user.name, email: user.email });
+      nav.updateUser({ name: user.name, email: user.email, hasPassword: user.hasPassword });
       nav.replace('Dashboard', { name: user.name, email: user.email });
     } catch (e: any) {
       setErrors({ api: e.message ?? 'Registration failed. Please try again.' });
@@ -74,7 +74,7 @@ export default function SignUpScreen({ nav }: { nav: NavProps }) {
       const { accessToken, refreshToken, user } = result;
       await setTokens({ accessToken, refreshToken });
       nav.setToken(accessToken);
-      nav.updateUser({ name: user.name, email: user.email });
+      nav.updateUser({ name: user.name, email: user.email, hasPassword: user.hasPassword });
       nav.replace('Dashboard', { name: user.name, email: user.email });
     } catch (e: any) {
       setErrors({ api: e.message ?? 'Sign-in failed. Please try again.' });

@@ -9,6 +9,8 @@ import { StatusBar } from 'expo-status-bar';
 import SignUpScreen from './screens/SignUpScreen';
 import LoginScreen from './screens/LoginScreen';
 import VerifyEmailScreen from './screens/VerifyEmailScreen';
+import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
+import ChangePasswordScreen from './screens/ChangePasswordScreen';
 import OnboardingScreenTimeScreen, { SCREEN_TIME_ONBOARDING_KEY } from './screens/OnboardingScreenTimeScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import ProfileScreen from './screens/ProfileScreen';
@@ -34,8 +36,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 
 export type ScreenName =
-  | 'SignUp' | 'Login' | 'VerifyEmail' | 'OnboardingScreenTime'
-  | 'Dashboard' | 'Profile' | 'Settings'
+  | 'SignUp' | 'Login' | 'VerifyEmail' | 'ForgotPassword' | 'OnboardingScreenTime'
+  | 'Dashboard' | 'Profile' | 'Settings' | 'ChangePassword'
   | 'CreateSession' | 'NFCScan' | 'ActiveSession' | 'SessionComplete'
   | 'History' | 'Analytics' | 'AIInsights' | 'NFCSetup';
 
@@ -61,7 +63,7 @@ export type NavProps = {
 export type { SessionRecord, UserProfile, UserTag };
 
 const COMING_SOON: ScreenName[] = [];
-const NO_DRAWER:   ScreenName[] = ['SignUp', 'Login', 'VerifyEmail', 'OnboardingScreenTime', 'NFCScan', 'ActiveSession', 'SessionComplete'];
+const NO_DRAWER:   ScreenName[] = ['SignUp', 'Login', 'VerifyEmail', 'ForgotPassword', 'ChangePassword', 'OnboardingScreenTime', 'NFCScan', 'ActiveSession', 'SessionComplete'];
 const DARK_STATUS: ScreenName[] = ['ActiveSession'];
 
 export default function App() {
@@ -298,12 +300,13 @@ export default function App() {
       .then(setUserTags)
       .catch(console.error);
 
-    apiFetch<{ name: string; email: string; createdAt?: string; settings: Record<string, any> }>('/user/me', token)
+    apiFetch<{ name: string; email: string; createdAt?: string; hasPassword?: boolean; settings: Record<string, any> }>('/user/me', token)
       .then(me => {
         updateUser({
           name:                 me.name,
           email:                me.email,
           createdAt:            me.createdAt,
+          hasPassword:          me.hasPassword,
           dailyGoalMinutes:     me.settings?.dailyGoalMinutes     ?? 120,
           weeklyGoalMinutes:    me.settings?.weeklyGoalMinutes     ?? 600,
           preferredDuration:    me.settings?.defaultDuration       ?? 25,
@@ -366,6 +369,8 @@ export default function App() {
         {current === 'SignUp'          && <SignUpScreen nav={nav} />}
         {current === 'Login'           && <LoginScreen nav={nav} />}
         {current === 'VerifyEmail'     && <VerifyEmailScreen nav={nav} />}
+        {current === 'ForgotPassword'  && <ForgotPasswordScreen nav={nav} />}
+        {current === 'ChangePassword'  && <ChangePasswordScreen nav={nav} />}
         {current === 'OnboardingScreenTime' && <OnboardingScreenTimeScreen nav={nav} />}
         {current === 'Dashboard'       && <DashboardScreen nav={nav} />}
         {current === 'Profile'         && <ProfileScreen nav={nav} />}

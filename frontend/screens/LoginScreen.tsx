@@ -40,7 +40,7 @@ export default function LoginScreen({ nav }: { nav: NavProps }) {
       );
       await setTokens({ accessToken, refreshToken });
       nav.setToken(accessToken);
-      nav.updateUser({ name: user.name, email: user.email });
+      nav.updateUser({ name: user.name, email: user.email, hasPassword: user.hasPassword });
       nav.replace('Dashboard', { name: user.name, email: user.email });
     } catch (e: any) {
       if (e.code === 'EMAIL_UNVERIFIED') {
@@ -70,7 +70,7 @@ export default function LoginScreen({ nav }: { nav: NavProps }) {
       const { accessToken, refreshToken, user } = result;
       await setTokens({ accessToken, refreshToken });
       nav.setToken(accessToken);
-      nav.updateUser({ name: user.name, email: user.email });
+      nav.updateUser({ name: user.name, email: user.email, hasPassword: user.hasPassword });
       nav.replace('Dashboard', { name: user.name, email: user.email });
     } catch (e: any) {
       setErrors({ api: e.message ?? 'Sign-in failed. Please try again.' });
@@ -113,7 +113,10 @@ export default function LoginScreen({ nav }: { nav: NavProps }) {
         />
         {errors.password && <Text style={styles.error}>{errors.password}</Text>}
 
-        <TouchableOpacity style={styles.forgotRow} onPress={() => {}}>
+        <TouchableOpacity
+          style={styles.forgotRow}
+          onPress={() => nav.navigate('ForgotPassword', { email })}
+        >
           <Text style={styles.forgotText}>Forgot password?</Text>
         </TouchableOpacity>
 

@@ -41,7 +41,7 @@ export default function VerifyEmailScreen({ nav }: { nav: NavProps }) {
       });
       await setTokens({ accessToken, refreshToken });
       nav.setToken(accessToken);
-      nav.updateUser({ name: user.name, email: user.email });
+      nav.updateUser({ name: user.name, email: user.email, hasPassword: user.hasPassword });
       nav.replace('Dashboard', { name: user.name, email: user.email });
     } catch (e: any) {
       setError(e.message ?? 'Verification failed. Try again.');
