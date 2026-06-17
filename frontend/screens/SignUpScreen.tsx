@@ -104,6 +104,7 @@ export default function SignUpScreen({ nav }: { nav: NavProps }) {
           style={[styles.input, errors.name && styles.inputError]}
           placeholder="Alex Chen" placeholderTextColor="#C3CAD4"
           value={name} onChangeText={setName}
+          textContentType="name" autoComplete="name"
         />
         {errors.name && <Text style={styles.error}>{errors.name}</Text>}
 
@@ -112,7 +113,8 @@ export default function SignUpScreen({ nav }: { nav: NavProps }) {
           style={[styles.input, errors.email && styles.inputError]}
           placeholder="alex@university.edu" placeholderTextColor="#C3CAD4"
           value={email} onChangeText={setEmail}
-          keyboardType="email-address" autoCapitalize="none"
+          keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
+          textContentType="emailAddress" autoComplete="email"
         />
         {errors.email && <Text style={styles.error}>{errors.email}</Text>}
 
@@ -121,7 +123,8 @@ export default function SignUpScreen({ nav }: { nav: NavProps }) {
           style={[styles.input, errors.password && styles.inputError]}
           placeholder="••••••" placeholderTextColor="#C3CAD4"
           value={password} onChangeText={setPassword}
-          secureTextEntry
+          secureTextEntry autoCapitalize="none" autoCorrect={false}
+          textContentType="newPassword" autoComplete="new-password"
         />
         {errors.password && <Text style={styles.error}>{errors.password}</Text>}
 

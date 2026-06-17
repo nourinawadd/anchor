@@ -71,6 +71,7 @@ export default function ChangePasswordScreen({ nav }: { nav: NavProps }) {
           style={styles.input}
           placeholder="Current password" placeholderTextColor="#C3CAD4"
           value={current} onChangeText={setCurrent} secureTextEntry autoFocus
+          textContentType="password" autoComplete="current-password" autoCapitalize="none" autoCorrect={false}
         />
 
         <Text style={styles.label}>NEW PASSWORD</Text>
@@ -78,6 +79,7 @@ export default function ChangePasswordScreen({ nav }: { nav: NavProps }) {
           style={styles.input}
           placeholder="At least 8 characters" placeholderTextColor="#C3CAD4"
           value={next} onChangeText={setNext} secureTextEntry
+          textContentType="newPassword" autoComplete="new-password" autoCapitalize="none" autoCorrect={false}
         />
 
         <Text style={styles.label}>CONFIRM NEW PASSWORD</Text>
@@ -85,6 +87,7 @@ export default function ChangePasswordScreen({ nav }: { nav: NavProps }) {
           style={styles.input}
           placeholder="Re-enter new password" placeholderTextColor="#C3CAD4"
           value={confirm} onChangeText={setConfirm} secureTextEntry
+          textContentType="newPassword" autoComplete="new-password" autoCapitalize="none" autoCorrect={false}
         />
 
         <TouchableOpacity

@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, KeyboardAvoidingView, Platform, ScrollView,
+  StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Image,
 } from 'react-native';
 import { NavProps } from '../App';
 import { apiFetch, setTokens } from '../api/client';
@@ -72,8 +72,10 @@ export default function VerifyEmailScreen({ nav }: { nav: NavProps }) {
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
 
         <View style={styles.logoRow}>
-          <View style={styles.logoCircle} />
-          <Text style={styles.logoText}>FocusLock</Text>
+          <View style={styles.logoBadge}>
+            <Image source={require('../assets/anchor-logo.png')} style={styles.logoImg} resizeMode="contain" />
+          </View>
+          <Image source={require('../assets/anchor-wordmark.png')} style={styles.wordmark} resizeMode="contain" />
         </View>
 
         <Text style={styles.title}>Check your email</Text>
@@ -125,8 +127,9 @@ const styles = StyleSheet.create({
   flex:           { flex: 1, backgroundColor: '#F6F7F1' },
   container:      { padding: 28, paddingTop: Platform.OS === 'ios' ? 70 : 50, paddingBottom: 40 },
   logoRow:        { flexDirection: 'row', alignItems: 'center', marginBottom: 36 },
-  logoCircle:     { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: '#313852', marginRight: 8 },
-  logoText:       { fontSize: 18, fontWeight: '700', color: '#313852' },
+  logoBadge:      { width: 38, height: 38, borderRadius: 19, backgroundColor: '#313852', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  logoImg:        { width: 24, height: 24 },
+  wordmark:       { width: 104, height: 30 },
   title:          { fontSize: 28, fontWeight: 'bold', color: '#313852', marginBottom: 6 },
   subtitle:       { fontSize: 14, color: '#2F2F2F', marginBottom: 28, lineHeight: 21 },
   emailText:      { color: '#313852', fontWeight: '600' },

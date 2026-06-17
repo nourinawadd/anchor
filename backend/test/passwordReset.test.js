@@ -34,11 +34,11 @@ function lastResetCodeFor(email) {
 }
 
 describe('POST /api/auth/forgot-password', () => {
-  it('returns 200 without sending for an unknown email (no enumeration)', async () => {
+  it('returns 404 NO_ACCOUNT for an unknown email without sending', async () => {
     const res = await request(app).post('/api/auth/forgot-password')
       .send({ email: 'nobody@example.test' });
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ sent: true });
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe('NO_ACCOUNT');
     expect(sendPasswordResetEmail).not.toHaveBeenCalled();
   });
 

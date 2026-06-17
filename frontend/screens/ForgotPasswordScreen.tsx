@@ -7,7 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, KeyboardAvoidingView, Platform, ScrollView,
+  StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Image,
 } from 'react-native';
 import { NavProps } from '../App';
 import { apiFetch, setTokens } from '../api/client';
@@ -36,9 +36,9 @@ export default function ForgotPasswordScreen({ nav }: { nav: NavProps }) {
 
   const validEmail = /\S+@\S+\.\S+/.test(email.trim());
 
-  // Phase 1 (and resend): request a reset code. The endpoint is enumeration-safe
-  // (always 200), so we advance to the reset phase regardless of whether the
-  // email is registered. A 429 just means a code was already sent recently.
+  // Phase 1 (and resend): request a reset code. The backend 404s with NO_ACCOUNT
+  // when the email isn't registered (we surface that and stay put); a 429 means a
+  // code was already sent recently, so we still advance to let them enter it.
   const requestCode = async (isResend = false) => {
     if (loading) return;
     if (!validEmail) { setError('Enter a valid email address'); return; }
@@ -54,13 +54,14 @@ export default function ForgotPasswordScreen({ nav }: { nav: NavProps }) {
       setCooldown(RESEND_SECONDS);
       setInfo(isResend
         ? 'A new code is on its way — check your inbox (and spam).'
-        : 'If an account exists for that email, a 6-digit code is on its way.');
+        : 'A 6-digit code is on its way — check your inbox (and spam).');
     } catch (e: any) {
       if (e.status === 429) {
         // A code was already sent within the cooldown — let them enter it.
         setPhase('reset');
         setInfo('A code was already sent recently — check your inbox (and spam).');
       } else {
+        // NO_ACCOUNT (404) and other errors: surface and stay on the email step.
         setError(e.message ?? 'Could not send the code. Try again.');
       }
     } finally {
@@ -104,8 +105,10 @@ export default function ForgotPasswordScreen({ nav }: { nav: NavProps }) {
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
 
         <View style={styles.logoRow}>
-          <View style={styles.logoCircle} />
-          <Text style={styles.logoText}>FocusLock</Text>
+          <View style={styles.logoBadge}>
+            <Image source={require('../assets/anchor-logo.png')} style={styles.logoImg} resizeMode="contain" />
+          </View>
+          <Image source={require('../assets/anchor-wordmark.png')} style={styles.wordmark} resizeMode="contain" />
         </View>
 
         <Text style={styles.title}>Reset password</Text>
@@ -125,7 +128,8 @@ export default function ForgotPasswordScreen({ nav }: { nav: NavProps }) {
               style={styles.input}
               placeholder="alex@university.edu" placeholderTextColor="#C3CAD4"
               value={email} onChangeText={setEmail}
-              keyboardType="email-address" autoCapitalize="none" autoFocus
+              keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
+              textContentType="emailAddress" autoComplete="email" autoFocus
             />
 
             <TouchableOpacity
@@ -152,6 +156,7 @@ export default function ForgotPasswordScreen({ nav }: { nav: NavProps }) {
               style={styles.input}
               placeholder="At least 8 characters" placeholderTextColor="#C3CAD4"
               value={password} onChangeText={setPassword} secureTextEntry
+              textContentType="newPassword" autoComplete="new-password" autoCapitalize="none" autoCorrect={false}
             />
 
             <Text style={styles.label}>CONFIRM PASSWORD</Text>
@@ -159,6 +164,7 @@ export default function ForgotPasswordScreen({ nav }: { nav: NavProps }) {
               style={styles.input}
               placeholder="Re-enter new password" placeholderTextColor="#C3CAD4"
               value={confirm} onChangeText={setConfirm} secureTextEntry
+              textContentType="newPassword" autoComplete="new-password" autoCapitalize="none" autoCorrect={false}
             />
 
             <TouchableOpacity
@@ -192,8 +198,9 @@ const styles = StyleSheet.create({
   flex:           { flex: 1, backgroundColor: '#F6F7F1' },
   container:      { padding: 28, paddingTop: Platform.OS === 'ios' ? 70 : 50, paddingBottom: 40 },
   logoRow:        { flexDirection: 'row', alignItems: 'center', marginBottom: 36 },
-  logoCircle:     { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: '#313852', marginRight: 8 },
-  logoText:       { fontSize: 18, fontWeight: '700', color: '#313852' },
+  logoBadge:      { width: 38, height: 38, borderRadius: 19, backgroundColor: '#313852', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  logoImg:        { width: 24, height: 24 },
+  wordmark:       { width: 104, height: 30 },
   title:          { fontSize: 28, fontWeight: 'bold', color: '#313852', marginBottom: 6 },
   subtitle:       { fontSize: 14, color: '#2F2F2F', marginBottom: 28, lineHeight: 21 },
   emailText:      { color: '#313852', fontWeight: '600' },

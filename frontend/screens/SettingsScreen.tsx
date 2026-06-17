@@ -365,7 +365,9 @@ const s = StyleSheet.create({
   modalCard:       { backgroundColor: colors.white, borderRadius: radii.xl, padding: 24, width: '100%', maxWidth: 340 },
   modalTitle:      { fontSize: fontSize.xl - 1, fontWeight: '700', color: colors.ink, marginBottom: 8 },
   modalSub:        { fontSize: fontSize.sm, color: colors.muted, lineHeight: 20, marginBottom: 16 },
-  modalInput:      { borderWidth: 1.5, borderColor: colors.border, borderRadius: radii.md, padding: spacing.md, fontSize: fontSize.md, color: colors.ink, marginBottom: 16, letterSpacing: 2 },
+  // No letterSpacing: on iOS it spaces out the placeholder ("D E L E T E") and
+  // lags typing — a known iOS TextInput rendering/perf bug.
+  modalInput:      { borderWidth: 1.5, borderColor: colors.border, borderRadius: radii.md, padding: spacing.md, fontSize: fontSize.md, color: colors.ink, marginBottom: 16 },
   modalActions:    { flexDirection: 'row', gap: 12 },
   modalCancelBtn:  { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: radii.md, backgroundColor: colors.border },
   modalCancelText: { fontSize: fontSize.md, fontWeight: '600', color: colors.inkSoft },

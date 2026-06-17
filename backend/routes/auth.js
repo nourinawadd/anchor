@@ -267,23 +267,27 @@ router.post('/resend-code', loginLimiter, asyncHandler(async (req, res) => {
 }));
 
 // ─── POST /api/auth/forgot-password ──────────────────────────────────────────
-// Body: { email }. Always answers 200 { sent: true } — for unknown emails too —
-// so it can't be used to probe which addresses have accounts. A real send is
-// throttled to one per RESEND_COOLDOWN_MS. Works for social-only accounts too:
-// they own the verified email, so a reset lets them add password login.
+// Body: { email }. Verifies the email belongs to a real account and 404s with
+// NO_ACCOUNT otherwise, so the app can tell the user up-front rather than send
+// them to enter a code that will never arrive. (This deliberately trades away
+// account-enumeration resistance for clearer UX; the IP rate limiter still caps
+// probing.) A real send is throttled to one per RESEND_COOLDOWN_MS. Works for
+// social-only accounts too: they own the verified email, so a reset lets them
+// add password login.
 router.post('/forgot-password', loginLimiter, asyncHandler(async (req, res) => {
   const email = (req.body.email ?? '').trim().toLowerCase();
   if (!email)
     return res.status(400).json({ message: 'email is required' });
 
   const user = await User.findOne({ email });
-  if (user) {
-    const last = user.passwordReset?.lastSentAt?.getTime() ?? 0;
-    if (Date.now() - last < RESEND_COOLDOWN_MS)
-      return res.status(429).json({ message: 'Please wait a minute before requesting another code' });
-    await issueResetCode(user);
-  }
+  if (!user)
+    return res.status(404).json({ message: 'No account found with that email', code: 'NO_ACCOUNT' });
 
+  const last = user.passwordReset?.lastSentAt?.getTime() ?? 0;
+  if (Date.now() - last < RESEND_COOLDOWN_MS)
+    return res.status(429).json({ message: 'Please wait a minute before requesting another code' });
+
+  await issueResetCode(user);
   res.json({ sent: true });
 }));
 
