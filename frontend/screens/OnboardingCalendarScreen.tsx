@@ -1,33 +1,30 @@
-// frontend/screens/OnboardingScreenTimeScreen.tsx
-// Permission-priming step, shown once per device after sign-in (iOS only,
-// while Screen Time authorization is still notDetermined): explains WHY
-// Anchor wants the access *before* triggering Apple's Family Controls dialog,
-// which is intimidating without context. Designed as a standalone onboarding
-// step so it can slot into the future post-install onboarding carousel.
+// frontend/screens/OnboardingCalendarScreen.tsx
+// Permission-priming step, shown once per device after sign-in (iOS only):
+// explains WHY Anchor wants Calendar access *before* triggering iOS's system
+// permission dialog, which is easier to grant with context. Mirrors
+// OnboardingScreenTimeScreen so the onboarding steps feel like one flow.
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
-import { requestAuthorization } from 'anchor-screen-time';
+import { requestCalendarPermission, setCalendarSyncEnabled } from '../utils/calendar';
 import {
-  SCREEN_TIME_ONBOARDING_KEY,
+  CALENDAR_ONBOARDING_KEY,
   markOnboardingSeen,
   nextOnboardingStep,
 } from '../utils/onboarding';
 
-// Set on grant, deny, or skip — the screen appears at most once per device.
-// (Reinstalling the app clears it, matching a fresh onboarding run.)
-export { SCREEN_TIME_ONBOARDING_KEY };
+export { CALENDAR_ONBOARDING_KEY };
 
-export default function OnboardingScreenTimeScreen({ nav }: { nav: NavProps }) {
+export default function OnboardingCalendarScreen({ nav }: { nav: NavProps }) {
   const [busy,   setBusy]   = useState(false);
   const [denied, setDenied] = useState(false);
 
-  const markSeen = () => markOnboardingSeen(SCREEN_TIME_ONBOARDING_KEY);
+  const markSeen = () => markOnboardingSeen(CALENDAR_ONBOARDING_KEY);
 
   const finish = async () => {
     await markSeen();
-    const next = await nextOnboardingStep('OnboardingScreenTime');
+    const next = await nextOnboardingStep('OnboardingCalendar');
     nav.replace(next ?? 'Dashboard');
   };
 
@@ -35,14 +32,14 @@ export default function OnboardingScreenTimeScreen({ nav }: { nav: NavProps }) {
     if (busy) return;
     setBusy(true);
     try {
-      const status = await requestAuthorization();
-      if (status === 'approved') {
+      const granted = await requestCalendarPermission();
+      if (granted) {
+        await setCalendarSyncEnabled(true);
         await finish();
         return;
       }
-      // Denied (or iCloud not signed in). Denial is sticky at the OS level —
-      // re-asking won't re-prompt — so show the Settings hint and let them
-      // continue; CreateSession remains the late-grant fallback.
+      // Denied. The OS won't re-prompt, so show the Settings hint and let them
+      // continue; calendar sync stays off and can be enabled later in Settings.
       await markSeen();
       setDenied(true);
     } catch {
@@ -57,24 +54,23 @@ export default function OnboardingScreenTimeScreen({ nav }: { nav: NavProps }) {
     <View style={styles.screen}>
       <View style={styles.content}>
         <View style={styles.iconCircle}>
-          <Ionicons name="shield-half-outline" size={44} color="#fff" />
+          <Ionicons name="calendar-outline" size={44} color="#fff" />
         </View>
 
-        <Text style={styles.title}>Block distractions{'\n'}automatically</Text>
+        <Text style={styles.title}>Plan around{'\n'}your day</Text>
         <Text style={styles.body}>
-          During focus sessions, Anchor shields the apps you choose — opening
-          them shows a block screen until your session ends.
+          With calendar access, Anchor shows your day's events on the dashboard
+          and logs each completed session to a dedicated “Anchor” calendar — so
+          your focus time lives alongside everything else.
         </Text>
         <Text style={styles.body}>
-          To do this, iOS will ask you to allow <Text style={styles.bold}>Screen Time
-          access</Text>. The system dialog mentions “Family Controls” — that's
-          just Apple's name for the underlying feature.
+          iOS will ask you to allow <Text style={styles.bold}>Calendar access</Text>.
+          Anchor only reads today's events and writes its own sessions — nothing else.
         </Text>
 
         {denied && (
           <Text style={styles.deniedNote}>
-            No problem — you can enable it anytime in iOS Settings, or when you
-            set up app blocking in your first session.
+            No problem — you can turn calendar sync on anytime from Settings.
           </Text>
         )}
       </View>
@@ -91,7 +87,7 @@ export default function OnboardingScreenTimeScreen({ nav }: { nav: NavProps }) {
               onPress={handleEnable}
               disabled={busy}
             >
-              <Text style={styles.buttonText}>{busy ? 'Waiting for iOS…' : 'Enable App Blocking'}</Text>
+              <Text style={styles.buttonText}>{busy ? 'Waiting for iOS…' : 'Connect Calendar'}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={finish} disabled={busy}>
               <Text style={styles.skipText}>Maybe later</Text>

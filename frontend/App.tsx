@@ -13,7 +13,8 @@ import VerifyEmailScreen from './screens/VerifyEmailScreen';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import ChangePasswordScreen from './screens/ChangePasswordScreen';
 import OnboardingScreen, { INTRO_ONBOARDING_KEY } from './screens/OnboardingScreen';
-import OnboardingScreenTimeScreen, { SCREEN_TIME_ONBOARDING_KEY } from './screens/OnboardingScreenTimeScreen';
+import OnboardingScreenTimeScreen from './screens/OnboardingScreenTimeScreen';
+import OnboardingCalendarScreen from './screens/OnboardingCalendarScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import SettingsScreen from './screens/SettingsScreen';
@@ -32,13 +33,14 @@ import { registerForPush, unregisterPush, cancelLegacyDailyNudge } from './notif
 import {
   isSupported as screenTimeSupported,
   clearShield as clearScreenTimeShield,
-  getAuthorizationStatus as getScreenTimeAuthStatus,
 } from 'anchor-screen-time';
+import { nextOnboardingStep } from './utils/onboarding';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 
 export type ScreenName =
-  | 'Onboarding' | 'SignUp' | 'Login' | 'VerifyEmail' | 'ForgotPassword' | 'OnboardingScreenTime'
+  | 'Onboarding' | 'SignUp' | 'Login' | 'VerifyEmail' | 'ForgotPassword'
+  | 'OnboardingScreenTime' | 'OnboardingCalendar'
   | 'Dashboard' | 'Profile' | 'Settings' | 'ChangePassword'
   | 'CreateSession' | 'NFCScan' | 'ActiveSession' | 'SessionComplete'
   | 'History' | 'Analytics' | 'AIInsights' | 'NFCSetup';
@@ -65,7 +67,7 @@ export type NavProps = {
 export type { SessionRecord, UserProfile, UserTag };
 
 const COMING_SOON: ScreenName[] = [];
-const NO_DRAWER:   ScreenName[] = ['Onboarding', 'SignUp', 'Login', 'VerifyEmail', 'ForgotPassword', 'ChangePassword', 'OnboardingScreenTime', 'NFCScan', 'ActiveSession', 'SessionComplete'];
+const NO_DRAWER:   ScreenName[] = ['Onboarding', 'SignUp', 'Login', 'VerifyEmail', 'ForgotPassword', 'ChangePassword', 'OnboardingScreenTime', 'OnboardingCalendar', 'NFCScan', 'ActiveSession', 'SessionComplete'];
 const DARK_STATUS: ScreenName[] = ['Onboarding', 'ActiveSession'];
 
 // TEMP — set to true to always open on the intro onboarding while developing.
@@ -315,20 +317,14 @@ export default function App() {
         else setSessions([]);
       });
 
-    // Screen Time permission onboarding — once per device, only while iOS has
-    // never been asked (notDetermined). Granting, denying, or skipping sets
-    // the flag, so this can never nag. A live-session resume wins over it.
+    // Permission-priming onboarding chain (Screen Time → Calendar), each shown
+    // at most once per device. nextOnboardingStep skips steps that don't apply /
+    // were already handled and marks them seen, so this can never nag. A
+    // live-session resume wins over it.
     (async () => {
-      if (!screenTimeSupported()) return;
-      if (await AsyncStorage.getItem(SCREEN_TIME_ONBOARDING_KEY)) return;
-      const status = await getScreenTimeAuthStatus();
-      if (status !== 'notDetermined') {
-        // Already granted/denied elsewhere (e.g. via Create Session) — done.
-        await AsyncStorage.setItem(SCREEN_TIME_ONBOARDING_KEY, 'seen');
-        return;
-      }
-      if (currentRef.current === 'ActiveSession') return;   // don't interrupt a resumed session
-      navigate('OnboardingScreenTime');
+      const step = await nextOnboardingStep();
+      // Re-check at navigate time: don't interrupt a session resumed mid-await.
+      if (step && currentRef.current !== 'ActiveSession') navigate(step);
     })().catch(console.error);
 
     apiFetch<UserTag[]>('/user/nfc-tags', token)
@@ -407,7 +403,8 @@ export default function App() {
         {current === 'VerifyEmail'     && <VerifyEmailScreen nav={nav} />}
         {current === 'ForgotPassword'  && <ForgotPasswordScreen nav={nav} />}
         {current === 'ChangePassword'  && <ChangePasswordScreen nav={nav} />}
-        {current === 'OnboardingScreenTime' && <OnboardingScreenTimeScreen nav={nav} />}
+        {current === 'OnboardingScreenTime'    && <OnboardingScreenTimeScreen nav={nav} />}
+        {current === 'OnboardingCalendar'      && <OnboardingCalendarScreen nav={nav} />}
         {current === 'Dashboard'       && <DashboardScreen nav={nav} />}
         {current === 'Profile'         && <ProfileScreen nav={nav} />}
         {current === 'Settings'        && <SettingsScreen nav={nav} />}
