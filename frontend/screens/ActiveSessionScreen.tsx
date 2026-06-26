@@ -11,6 +11,7 @@ import { colors, spacing, radii, fontSize } from '../constants/theme';
 import { apiFetch } from '../api/client';
 import { hLight, hMedium, hSuccess } from '../utils/haptics';
 import { initNFC, readTag, cancelScan, isNFCSupported } from '../utils/nfc';
+import { isPadDevice, useResponsive } from '../utils/responsive';
 import { addSessionEvent } from '../utils/calendar';
 import { scheduleSessionAlert, cancelSessionAlert } from '../notifications';
 import {
@@ -42,6 +43,8 @@ function fmt(secs: number) {
 type NfcModalPhase = 'scanning' | 'unregistered';
 
 export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
+  const { isWide } = useResponsive();
+  const ringSize    = isWide ? 320 : 250;
   const totalSecs   = parseInt(nav.params.plannedDuration ?? '45') * 60;
   const isPomo      = nav.params.pomodoro === 'true';
   const pomoWork    = parseInt(nav.params.pomodoroWork  ?? '25');
@@ -549,7 +552,8 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   ].join('  ·  ');
 
   const blockedCount = stCount > 0 ? stCount : blockedApps.length;
-  const hasNfc       = nav.userTags.length > 0;
+  // iPads have no NFC hardware, so they can never be gated on a tag to stop.
+  const hasNfc       = nav.userTags.length > 0 && !isPadDevice;
 
   // Live distraction-risk read-out — grows with elapsed focus time, like the
   // server-side scoring heuristic.
@@ -574,7 +578,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
       <View style={styles.center}>
         <CircularProgress
           progress={progress}
-          size={250}
+          size={ringSize}
           strokeWidth={4}
           color={RING_ARC}
           trackColor={RING_TRACK}
@@ -717,7 +721,7 @@ const styles = StyleSheet.create({
   dotFilled:  { backgroundColor: colors.white },
   dotEmpty:   { borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.35)' },
 
-  bottom:     { alignSelf: 'stretch' },
+  bottom:     { alignSelf: 'center', width: '100%', maxWidth: 460 },
   controlRow: { flexDirection: 'row', justifyContent: 'center', gap: spacing.md, marginBottom: spacing.xl },
   pausePill:  {
     flexDirection: 'row', alignItems: 'center', gap: 6,

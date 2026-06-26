@@ -10,12 +10,14 @@ import {
   StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Image,
 } from 'react-native';
 import { NavProps } from '../App';
+import { useResponsive } from '../utils/responsive';
 import { apiFetch, setTokens } from '../api/client';
 
 const RESEND_SECONDS = 60;
 const MIN_PASSWORD   = 8;
 
 export default function ForgotPasswordScreen({ nav }: { nav: NavProps }) {
+  const { sidePadding } = useResponsive();
   const [phase,    setPhase]    = useState<'email' | 'reset'>('email');
   const [email,    setEmail]    = useState(nav.params.email ?? '');
   const [code,     setCode]     = useState('');
@@ -102,7 +104,7 @@ export default function ForgotPasswordScreen({ nav }: { nav: NavProps }) {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.container, { paddingHorizontal: 28 + sidePadding }]} keyboardShouldPersistTaps="handled">
 
         <View style={styles.logoRow}>
           <View style={styles.logoBadge}>

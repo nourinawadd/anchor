@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
+import { useResponsive } from '../utils/responsive';
 import { requestCalendarPermission, setCalendarSyncEnabled } from '../utils/calendar';
 import {
   CALENDAR_ONBOARDING_KEY,
@@ -17,6 +18,7 @@ import {
 export { CALENDAR_ONBOARDING_KEY };
 
 export default function OnboardingCalendarScreen({ nav }: { nav: NavProps }) {
+  const { sidePadding } = useResponsive();
   const [busy,   setBusy]   = useState(false);
   const [denied, setDenied] = useState(false);
 
@@ -51,7 +53,7 @@ export default function OnboardingCalendarScreen({ nav }: { nav: NavProps }) {
   };
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { paddingHorizontal: 28 + sidePadding }]}>
       <View style={styles.content}>
         <View style={styles.iconCircle}>
           <Ionicons name="calendar-outline" size={44} color="#fff" />

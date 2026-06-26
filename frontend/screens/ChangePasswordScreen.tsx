@@ -10,11 +10,13 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
+import { useResponsive } from '../utils/responsive';
 import { apiFetch, setTokens } from '../api/client';
 
 const MIN_PASSWORD = 8;
 
 export default function ChangePasswordScreen({ nav }: { nav: NavProps }) {
+  const { sidePadding } = useResponsive();
   const [current, setCurrent] = useState('');
   const [next,    setNext]    = useState('');
   const [confirm, setConfirm] = useState('');
@@ -50,7 +52,7 @@ export default function ChangePasswordScreen({ nav }: { nav: NavProps }) {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.container, { paddingHorizontal: 28 + sidePadding }]} keyboardShouldPersistTaps="handled">
 
         <View style={styles.header}>
           <TouchableOpacity style={styles.backBtn} onPress={() => nav.navigate('Profile')}>

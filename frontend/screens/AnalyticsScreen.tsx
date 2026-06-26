@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Animate
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
 import { colors, fontSize, spacing, radii } from '../constants/theme';
+import { useResponsive } from '../utils/responsive';
 import { apiFetch } from '../api/client';
 
 type FilterType = 'Day' | 'Week' | 'Month';
@@ -74,6 +75,7 @@ function BarChart({ data, maxMins, progress }: {
 }
 
 export default function AnalyticsScreen({ nav }: { nav: NavProps }) {
+  const { sidePadding } = useResponsive();
   const initial = nav.user.name.charAt(0).toUpperCase();
 
   const [filter,  setFilter]  = useState<FilterType>('Week');
@@ -132,7 +134,7 @@ export default function AnalyticsScreen({ nav }: { nav: NavProps }) {
         ))}
       </View>
 
-      <ScrollView contentContainerStyle={s.container} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[s.container, { paddingHorizontal: spacing.xl + sidePadding }]} showsVerticalScrollIndicator={false}>
 
         {/* Focus card + bar chart */}
         <View style={s.card}>

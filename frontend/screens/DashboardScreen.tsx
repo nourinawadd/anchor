@@ -5,6 +5,7 @@ import { NavProps } from '../App';
 import Card from '../components/Card';
 import SectionLabel from '../components/SectionLabel';
 import { colors, spacing, fontSize, radii } from '../constants/theme';
+import { useResponsive } from '../utils/responsive';
 import { computeStreak, computeFocusHours, computeTodayScore, computeDailyProgress, toDateStr, fmtHHMM } from '../store/sessions';
 import { apiFetch } from '../api/client';
 import { hMedium } from '../utils/haptics';
@@ -26,6 +27,7 @@ function bestTimeLabel(sessions: SessionRecord[]): string | null {
 }
 
 export default function DashboardScreen({ nav }: { nav: NavProps }) {
+  const { sidePadding } = useResponsive();
   const { sessions, user } = nav;
   const name     = user.name !== 'User' ? user.name : (nav.params.name ?? 'User');
   const initial  = name.charAt(0).toUpperCase();
@@ -67,7 +69,7 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
   const bestTime  = bestTimeLabel(sessions);
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.container, { paddingHorizontal: spacing.xl + sidePadding }]} showsVerticalScrollIndicator={false}>
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <View style={styles.header}>

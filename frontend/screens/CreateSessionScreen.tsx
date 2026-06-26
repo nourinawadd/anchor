@@ -12,6 +12,7 @@ import WheelPicker from '../components/WheelPicker';
 import { colors, spacing, radii, fontSize } from '../constants/theme';
 import { apiFetch } from '../api/client';
 import { hSelection, hLight, hMedium } from '../utils/haptics';
+import { isPadDevice, useResponsive } from '../utils/responsive';
 import { SessionCategory } from '../store/user';
 import {
   isSupported as screenTimeSupported,
@@ -45,6 +46,7 @@ type PomoPreset = typeof POMO_PRESETS[number];
 type ScreenState = 'category-select' | 'session-create';
 
 export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
+  const { sidePadding } = useResponsive();
   const [screenState, setScreenState] = useState<ScreenState>('category-select');
   const [categories, setCategories] = useState<SessionCategory[]>(nav.user.categories || []);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -292,7 +294,7 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
           <View style={styles.headerSpacer} />
         </View>
 
-        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.body, { paddingHorizontal: spacing.xl + sidePadding }]} showsVerticalScrollIndicator={false}>
           <SectionLabel noTopMargin>Your Categories</SectionLabel>
           
           {categories.length === 0 ? (
@@ -411,7 +413,7 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
 
       <ScrollView
         ref={bodyScrollRef}
-        contentContainerStyle={styles.body}
+        contentContainerStyle={[styles.body, { paddingHorizontal: spacing.xl + sidePadding }]}
         showsVerticalScrollIndicator={false}
       >
 
@@ -538,8 +540,9 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
         )}
 
         {/* Actions — with a registered tag, NFC is required to start (and end);
-            without one, the session starts and ends with no taps. */}
-        {nav.userTags.length > 0 ? (
+            without one, the session starts and ends with no taps. iPads have no
+            NFC hardware, so they always take the no-tap path. */}
+        {nav.userTags.length > 0 && !isPadDevice ? (
           <TouchableOpacity
             style={styles.nfcBtn}
             onPress={() => { hMedium(); startParams && nav.navigate('NFCScan', startParams); }}
@@ -556,9 +559,11 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
             >
               <Text style={styles.nfcBtnText}>Start</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.skipBtn} onPress={() => nav.navigate('NFCSetup', { from: 'CreateSession' })} activeOpacity={0.7}>
-              <Text style={styles.skipBtnText}>Add an NFC tag</Text>
-            </TouchableOpacity>
+            {!isPadDevice && (
+              <TouchableOpacity style={styles.skipBtn} onPress={() => nav.navigate('NFCSetup', { from: 'CreateSession' })} activeOpacity={0.7}>
+                <Text style={styles.skipBtnText}>Add an NFC tag</Text>
+              </TouchableOpacity>
+            )}
           </>
         )}
         <View style={{ height: 40 }} />

@@ -19,6 +19,7 @@ import PillBadge from '../components/PillBadge';
 import { NavProps } from '../App';
 import { apiFetch } from '../api/client';
 import { colors, spacing, radii, fontSize } from '../constants/theme';
+import { useResponsive } from '../utils/responsive';
 
 type Insight = {
   bestProductiveHour: number;
@@ -78,6 +79,7 @@ const timeAgo = (iso: string) => {
 };
 
 export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
+  const { sidePadding } = useResponsive();
   const [insight, setInsight] = useState<Insight | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -205,7 +207,7 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
     <View style={styles.screen}>
       {header}
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[styles.container, { paddingHorizontal: spacing.xl + sidePadding }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.ink} />}
       >

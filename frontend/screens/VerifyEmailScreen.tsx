@@ -8,12 +8,14 @@ import {
   StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Image,
 } from 'react-native';
 import { NavProps } from '../App';
+import { useResponsive } from '../utils/responsive';
 import { apiFetch, setTokens } from '../api/client';
 import { hSuccess, hError } from '../utils/haptics';
 
 const RESEND_SECONDS = 60;
 
 export default function VerifyEmailScreen({ nav }: { nav: NavProps }) {
+  const { sidePadding } = useResponsive();
   const email = nav.params.email ?? '';
 
   const [code,     setCode]     = useState('');
@@ -72,7 +74,7 @@ export default function VerifyEmailScreen({ nav }: { nav: NavProps }) {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.container, { paddingHorizontal: 28 + sidePadding }]} keyboardShouldPersistTaps="handled">
 
         <View style={styles.logoRow}>
           <View style={styles.logoBadge}>

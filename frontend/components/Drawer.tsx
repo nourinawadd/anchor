@@ -1,12 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated, View, Text, TouchableOpacity,
-  StyleSheet, Dimensions, Platform, Pressable,
+  StyleSheet, useWindowDimensions, Platform, Pressable,
 } from 'react-native';
 import { ScreenName, NavProps } from '../App';
 import { hSelection, hLight } from '../utils/haptics';
-
-const W = Dimensions.get('window').width * 0.80;
+import { isPadDevice } from '../utils/responsive';
 
 type Props = {
   isOpen: boolean;
@@ -27,13 +26,19 @@ const NAV_ITEMS: { label: string; screen: ScreenName }[] = [
 ];
 
 export default function Drawer({ isOpen, onClose, currentScreen, nav, onSignOut }: Props) {
+  // Width tracks the live window (reacts to rotation / Split View) and is capped
+  // so the panel never grows absurdly wide on a tablet.
+  const { width } = useWindowDimensions();
+  const W = Math.min(width * 0.8, 360);
+
   const [visible, setVisible] = useState(false);
-  const translateX = useRef(new Animated.Value(-W)).current;
+  const translateX = useRef(new Animated.Value(-360)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (isOpen) {
       setVisible(true);
+      translateX.setValue(-W);   // start off-screen at the current width
       Animated.parallel([
         Animated.timing(translateX, { toValue: 0, duration: 270, useNativeDriver: true }),
         Animated.timing(overlayOpacity, { toValue: 0.45, duration: 270, useNativeDriver: true }),
@@ -60,7 +65,7 @@ export default function Drawer({ isOpen, onClose, currentScreen, nav, onSignOut 
       </Animated.View>
 
       {/* Drawer panel */}
-      <Animated.View style={[styles.drawer, { transform: [{ translateX }] }]}>
+      <Animated.View style={[styles.drawer, { width: W, transform: [{ translateX }] }]}>
 
         {/* User info — tap to open Profile */}
         <TouchableOpacity
@@ -79,9 +84,10 @@ export default function Drawer({ isOpen, onClose, currentScreen, nav, onSignOut 
 
         <View style={styles.divider} />
 
-        {/* Nav links — no icons, plain text */}
+        {/* Nav links — no icons, plain text. NFC Setup is hidden on iPad
+            (no NFC hardware). */}
         <View style={styles.navList}>
-          {NAV_ITEMS.map(item => {
+          {NAV_ITEMS.filter(item => !(isPadDevice && item.screen === 'NFCSetup')).map(item => {
             const active = currentScreen === item.screen;
             return (
               <TouchableOpacity
@@ -110,7 +116,7 @@ export default function Drawer({ isOpen, onClose, currentScreen, nav, onSignOut 
 
 const styles = StyleSheet.create({
   drawer: {
-    position: 'absolute', top: 0, left: 0, bottom: 0, width: W,
+    position: 'absolute', top: 0, left: 0, bottom: 0,
     backgroundColor: '#fff',
     paddingTop: Platform.OS === 'ios' ? 64 : 44,
     paddingBottom: Platform.OS === 'ios' ? 40 : 24,

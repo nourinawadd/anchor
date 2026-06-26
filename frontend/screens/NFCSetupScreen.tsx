@@ -9,10 +9,12 @@ import { apiFetch } from '../api/client';
 import { initNFC, readTag, cancelScan, isNFCSupported } from '../utils/nfc';
 import { hMedium, hSuccess, hWarning, hError } from '../utils/haptics';
 import { colors, spacing, radii, fontSize } from '../constants/theme';
+import { useResponsive } from '../utils/responsive';
 
 type ScanPhase = 'idle' | 'scanning' | 'naming' | 'saving';
 
 export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
+  const { sidePadding } = useResponsive();
   const [scanPhase, setScanPhase]   = useState<ScanPhase>('idle');
   const [scannedUid, setScannedUid] = useState('');
   const [labelInput, setLabelInput] = useState('');
@@ -203,7 +205,7 @@ export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
         <View style={s.headerSpacer} />
       </View>
 
-      <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[s.body, { paddingHorizontal: spacing.xl + sidePadding }]} showsVerticalScrollIndicator={false}>
         <Text style={s.sectionLabel}>REGISTERED TAGS</Text>
 
         {nav.userTags.length === 0 ? (

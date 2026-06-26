@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NavProps, UserProfile } from '../App';
 import { DAILY_GOAL_OPTIONS, WEEKLY_GOAL_OPTIONS } from '../store/user';
 import { colors, fontSize, spacing, radii } from '../constants/theme';
+import { useResponsive } from '../utils/responsive';
 import { apiFetch } from '../api/client';
 import {
   isCalendarSupported, isCalendarSyncEnabled, setCalendarSyncEnabled, requestCalendarPermission,
@@ -67,6 +68,7 @@ function ToggleRow({ label, desc, value, onChange }: {
 }
 
 export default function SettingsScreen({ nav }: { nav: NavProps }) {
+  const { sidePadding } = useResponsive();
   const { user, token } = nav;
   const initial = user.name.charAt(0).toUpperCase();
 
@@ -138,7 +140,7 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
   };
 
   return (
-    <ScrollView style={s.screen} contentContainerStyle={s.container} showsVerticalScrollIndicator={false}>
+    <ScrollView style={s.screen} contentContainerStyle={[s.container, { paddingHorizontal: spacing.xl + sidePadding }]} showsVerticalScrollIndicator={false}>
 
       <View style={s.header}>
         <TouchableOpacity style={s.menuBtn} onPress={nav.openDrawer}>

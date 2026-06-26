@@ -3,7 +3,7 @@
     "name": "Anchor",
     "slug": "anchor",
     "scheme": "anchor",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -14,7 +14,7 @@
       "backgroundColor": "#313852"
     },
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "dev.gradproject.anchor",
       "infoPlist": {
         "NFCReaderUsageDescription": "Anchor uses NFC to verify your physical presence at your focus location during sessions.",
@@ -22,9 +22,15 @@
         "NSCalendarsUsageDescription": "Anchor uses your Calendar to show today's schedule and to add your completed focus sessions as events.",
         "NSCalendarsFullAccessUsageDescription": "Anchor uses your Calendar to show today's schedule and to add your completed focus sessions as events.",
         "NSSupportsLiveActivities": true,
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ]
       },
-      "buildNumber": "48",
+      "buildNumber": "52",
       "usesAppleSignIn": true,
       "entitlements": {
         "com.apple.developer.family-controls": true
@@ -98,9 +104,9 @@
             }
           }
         },
-        "projectId": "12d77c6e-1eaa-40f9-8915-f4aef923b60b"
+        "projectId": "af2d20fd-3851-4e3d-b2b4-935ce3cdfd2b"
       }
     },
-    "owner": "maro2233"
+    "owner": "nourinawaddd"
   }
 }

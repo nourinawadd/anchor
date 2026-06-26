@@ -7,7 +7,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, Animated, ScrollView, TouchableOpacity,
-  StyleSheet, Dimensions, Platform, Image, Easing,
+  StyleSheet, useWindowDimensions, Platform, Image, Easing,
   NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -112,7 +112,9 @@ function AuraBlob({
 }
 
 export default function OnboardingScreen({ nav }: { nav: NavProps }) {
-  const { width: W, height: H } = Dimensions.get('window');
+  // Live window size (reacts to rotation) drives the paging width and the
+  // aura-blob positions, so the two-page swipe and the glow stay aligned.
+  const { width: W, height: H } = useWindowDimensions();
   // Brand wordmark font — bundled via expo-font from the rebuild onward, so the
   // wordmark renders in Garogier once loaded.
   const [fontsLoaded] = useFonts({ Garogier: require('../assets/fonts/Garogier.ttf') });

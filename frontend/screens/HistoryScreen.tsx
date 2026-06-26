@@ -5,6 +5,7 @@ import { NavProps, SessionRecord } from '../App';
 import Card from '../components/Card';
 import SectionLabel from '../components/SectionLabel';
 import { colors, fontSize, spacing, radii } from '../constants/theme';
+import { useResponsive } from '../utils/responsive';
 import { toDateStr, daysAgo, computeStreak, computeFocusHours } from '../store/sessions';
 import { apiFetch } from '../api/client';
 import { hSelection } from '../utils/haptics';
@@ -123,6 +124,7 @@ function EmptyGroup() {
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function HistoryScreen({ nav }: { nav: NavProps }) {
+  const { sidePadding } = useResponsive();
   const { sessions } = nav;
   const [histFilter, setHistFilter] = useState<HistoryFilter>('Today');
 
@@ -170,7 +172,7 @@ export default function HistoryScreen({ nav }: { nav: NavProps }) {
       </View>
 
       {/* ── Scrollable body ───────────────────────────────────────────────── */}
-      <ScrollView contentContainerStyle={main.container} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[main.container, { paddingHorizontal: spacing.xl + sidePadding }]} showsVerticalScrollIndicator={false}>
 
         {/* Streak + week strip */}
         <Card style={main.weekCard} padding={spacing.lg}>

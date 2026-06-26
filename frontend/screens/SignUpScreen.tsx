@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
+import { useResponsive } from '../utils/responsive';
 import { apiFetch, setTokens } from '../api/client';
 import { hMedium, hLight } from '../utils/haptics';
 import { signInWithGoogle, signInWithApple, isAppleAuthSupported, CANCELLED } from '../auth/social';
@@ -14,6 +15,7 @@ import { signInWithGoogle, signInWithApple, isAppleAuthSupported, CANCELLED } fr
 type Errors = { name?: string; email?: string; password?: string; api?: string };
 
 export default function SignUpScreen({ nav }: { nav: NavProps }) {
+  const { sidePadding } = useResponsive();
   const [name,     setName]     = useState('');
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
@@ -88,7 +90,7 @@ export default function SignUpScreen({ nav }: { nav: NavProps }) {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.container, { paddingHorizontal: 28 + sidePadding }]} keyboardShouldPersistTaps="handled">
 
         <View style={styles.logoRow}>
           <View style={styles.logoBadge}>

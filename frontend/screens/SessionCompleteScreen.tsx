@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
 import { colors, fontSize, spacing, radii } from '../constants/theme';
+import { useResponsive } from '../utils/responsive';
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 function formatDuration(mins: number): string {
@@ -19,6 +20,7 @@ function formatDuration(mins: number): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function SessionCompleteScreen({ nav }: { nav: NavProps }) {
+  const { sidePadding } = useResponsive();
   // ── Derive all values from session params ────────────────────────────────────
   const actualMins   = parseInt(nav.params.actualMinutes ?? nav.params.duration ?? '45');
   const focusScore   = nav.params.focusScore   ?? '—';
@@ -54,7 +56,7 @@ export default function SessionCompleteScreen({ nav }: { nav: NavProps }) {
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={styles.container}
+      contentContainerStyle={[styles.container, { paddingHorizontal: spacing.xl + sidePadding }]}
       showsVerticalScrollIndicator={false}
     >
       {/* ── Completion icon ─────────────────────────────────────────────────── */}

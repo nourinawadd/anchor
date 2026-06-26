@@ -3,8 +3,10 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Alert }
 import { NavProps } from '../App';
 import { apiFetch } from '../api/client';
 import { computeFocusHours, computeLongestStreak } from '../store/sessions';
+import { useResponsive } from '../utils/responsive';
 
 export default function ProfileScreen({ nav }: { nav: NavProps }) {
+  const { sidePadding } = useResponsive();
   const { user, sessions } = nav;
   const initial = user.name.charAt(0).toUpperCase();
 
@@ -39,7 +41,7 @@ export default function ProfileScreen({ nav }: { nav: NavProps }) {
     : '—';
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.container, { paddingHorizontal: 20 + sidePadding }]}>
 
       {/* Header */}
       <View style={styles.header}>
