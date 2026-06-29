@@ -3,7 +3,7 @@
 // When the token changes, sessions and user settings are re-fetched from the API.
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { SessionRecord } from './store/sessions';
-import { UserProfile, DEFAULT_USER, UserTag } from './store/user';
+import { UserProfile, DEFAULT_USER, UserTag, SessionCategory } from './store/user';
 import { View, Animated, PanResponder } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { hLight } from './utils/haptics';
@@ -329,6 +329,12 @@ export default function App() {
 
     apiFetch<UserTag[]>('/user/nfc-tags', token)
       .then(setUserTags)
+      .catch(console.error);
+
+    // Load categories up front so any screen (History, Dashboard) can resolve a
+    // session's categoryId → name without waiting for the Create screen to mount.
+    apiFetch<SessionCategory[]>('/user/categories', token)
+      .then(categories => updateUser({ categories }))
       .catch(console.error);
 
     apiFetch<{ name: string; email: string; createdAt?: string; hasPassword?: boolean; settings: Record<string, any> }>('/user/me', token)

@@ -83,7 +83,7 @@ function WeekStrip({ sessions }: { sessions: SessionRecord[] }) {
 }
 
 // ─── Session card ─────────────────────────────────────────────────────────────
-function SessionItem({ s, onDelete }: { s: SessionRecord; onDelete: () => void }) {
+function SessionItem({ s, categoryName, onDelete }: { s: SessionRecord; categoryName?: string; onDelete: () => void }) {
   const confirmDelete = () =>
     Alert.alert('Delete Session', 'Remove this session from history?', [
       { text: 'Cancel', style: 'cancel' },
@@ -95,7 +95,7 @@ function SessionItem({ s, onDelete }: { s: SessionRecord; onDelete: () => void }
       <View style={sc.row}>
         <View style={sc.left}>
           <Text style={sc.title} numberOfLines={1}>{s.title}</Text>
-          <Text style={sc.sub}>{s.type} · {s.duration} min · {s.startTime}–{s.endTime}</Text>
+          <Text style={sc.sub}>{categoryName ? `${categoryName} · ` : ''}{s.duration} min · {s.startTime}–{s.endTime}</Text>
         </View>
         <View style={sc.rightCol}>
           {s.completed && s.focusScore !== null ? (
@@ -127,6 +127,12 @@ export default function HistoryScreen({ nav }: { nav: NavProps }) {
   const { sidePadding } = useResponsive();
   const { sessions } = nav;
   const [histFilter, setHistFilter] = useState<HistoryFilter>('Today');
+
+  // Sessions store only categoryId; resolve it to the category's display name.
+  const categoriesById = useMemo(
+    () => new Map(nav.user.categories.map(c => [c.id, c.name] as const)),
+    [nav.user.categories],
+  );
 
   // Streak always computed from ALL sessions (overall consecutive streak)
   const streak = computeStreak(sessions);
@@ -207,6 +213,7 @@ export default function HistoryScreen({ nav }: { nav: NavProps }) {
                   <SessionItem
                     key={s.id}
                     s={s}
+                    categoryName={categoriesById.get(s.categoryId)}
                     onDelete={() => {
                       nav.deleteSession(s.id);
                       apiFetch(`/sessions/${s.id}`, nav.token, { method: 'DELETE' })

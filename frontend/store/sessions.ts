@@ -117,42 +117,7 @@ export function computeTodayScore(sessions: SessionRecord[]): number {
 }
 
 // ─── Seed data ────────────────────────────────────────────────────────────────
-// These are shown on first launch. Real sessions recorded during the current
-// app session are prepended to this list via nav.addSession().
-export const SEED_SESSIONS: SessionRecord[] = [
-  {
-    id: 'seed-t1', title: 'Deep Work Block',  type: 'Study',
-    duration: 45, startTime: '08:00', endTime: '08:45',
-    focusScore: 92, completed: true,  dateStr: daysAgo(0),
-  },
-  {
-    id: 'seed-t2', title: 'Reading Session',  type: 'Study',
-    duration: 25, startTime: '10:30', endTime: '10:55',
-    focusScore: null, completed: false, dateStr: daysAgo(0),
-  },
-  {
-    id: 'seed-y1', title: 'Project Planning', type: 'Work',
-    duration: 60, startTime: '09:00', endTime: '10:00',
-    focusScore: 87, completed: true,  dateStr: daysAgo(1),
-  },
-  {
-    id: 'seed-y2', title: 'Research Review',  type: 'Study',
-    duration: 30, startTime: '14:00', endTime: '14:30',
-    focusScore: 74, completed: true,  dateStr: daysAgo(1),
-  },
-  {
-    id: 'seed-d2', title: 'Morning Focus',    type: 'Work',
-    duration: 45, startTime: '07:30', endTime: '08:15',
-    focusScore: 89, completed: true,  dateStr: daysAgo(2),
-  },
-  {
-    id: 'seed-d3', title: 'Code Review',      type: 'Work',
-    duration: 30, startTime: '11:00', endTime: '11:30',
-    focusScore: 81, completed: true,  dateStr: daysAgo(3),
-  },
-  {
-    id: 'seed-d4', title: 'Evening Study',    type: 'Study',
-    duration: 50, startTime: '20:00', endTime: '20:50',
-    focusScore: 76, completed: true,  dateStr: daysAgo(4),
-  },
-];
+// (Removed) The old SEED_SESSIONS demo list lived here. It was unused —
+// sessions now load from the server (App.tsx) — and predated the categoryId
+// model (it still carried a freeform `type`), so it was dropped during the
+// category migration.
