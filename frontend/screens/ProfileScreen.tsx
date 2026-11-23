@@ -113,7 +113,7 @@ export default function ProfileScreen({ nav }: { nav: NavProps }) {
       )}
 
       {/* Logout */}
-      <TouchableOpacity style={styles.logoutBtn} onPress={nav.signOut}>
+      <TouchableOpacity style={styles.logoutBtn} onPress={nav.requestSignOut}>
         <Text style={styles.logoutText}>Log Out</Text>
       </TouchableOpacity>
 

@@ -400,6 +400,37 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
     nav.navigate(screen, startParams);
   };
 
+  // Only one session at a time: while one runs in the background, offer the way back.
+  if (nav.hasLiveSession) {
+    return (
+      <View style={styles.screen}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backBtn} onPress={nav.openDrawer}>
+            <Ionicons name="arrow-back" size={24} color={colors.ink} />
+          </TouchableOpacity>
+          <Text style={styles.title}>New Session</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <View style={[styles.body, { paddingHorizontal: spacing.xl + sidePadding }]}>
+          <Card style={styles.toggleCard} padding={spacing.lg}>
+            <View style={styles.toggleInfo}>
+              <Text style={styles.toggleTitle}>Session in progress</Text>
+              <Text style={styles.toggleSub}>Finish or stop your current session before starting a new one.</Text>
+            </View>
+            <Ionicons name="timer-outline" size={26} color={colors.ink} />
+          </Card>
+          <TouchableOpacity
+            style={styles.nfcBtn}
+            onPress={() => { hMedium(); nav.navigate('ActiveSession'); }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.nfcBtnText}>Return to session</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   if (screenState === 'category-select') {
     return (
       <View style={styles.screen}>
