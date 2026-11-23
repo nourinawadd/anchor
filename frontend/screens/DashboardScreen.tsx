@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform } from '
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
 import Card from '../components/Card';
+import GlassBackdrop from '../components/GlassBackdrop';
 import SectionLabel from '../components/SectionLabel';
 import { colors, spacing, fontSize, radii } from '../constants/theme';
 import { useResponsive } from '../utils/responsive';
@@ -69,7 +70,9 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
   const bestTime  = bestTimeLabel(sessions);
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.container, { paddingHorizontal: spacing.xl + sidePadding }]} showsVerticalScrollIndicator={false}>
+    <View style={styles.root}>
+      <GlassBackdrop />
+      <ScrollView style={styles.screen} contentContainerStyle={[styles.container, { paddingHorizontal: spacing.xl + sidePadding }]} showsVerticalScrollIndicator={false}>
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <View style={styles.header}>
@@ -177,13 +180,15 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
         <Text style={styles.startBtnText}>Start Focus Session</Text>
       </TouchableOpacity>
 
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 
 const styles = StyleSheet.create({
-  screen:     { flex: 1, backgroundColor: colors.bg },
+  root:       { flex: 1, backgroundColor: colors.bg },
+  screen:     { flex: 1, backgroundColor: 'transparent' },
   container:  { padding: spacing.xl, paddingTop: Platform.OS === 'ios' ? 78 : 58, paddingBottom: 52 },
 
   header:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.xl },

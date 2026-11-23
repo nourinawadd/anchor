@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps, UserTag } from '../App';
+import Card from '../components/Card';
+import GlassBackdrop from '../components/GlassBackdrop';
 import { apiFetch } from '../api/client';
 import { initNFC, readTag, cancelScan, isNFCSupported } from '../utils/nfc';
 import { hMedium, hSuccess, hWarning, hError } from '../utils/haptics';
@@ -197,6 +199,7 @@ export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
 
   return (
     <View style={s.screen}>
+      <GlassBackdrop />
       <View style={s.header}>
         <TouchableOpacity style={s.backBtn} onPress={handleBack} hitSlop={8}>
           <Ionicons name="arrow-back" size={24} color={colors.ink} />
@@ -209,16 +212,17 @@ export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
         <Text style={s.sectionLabel}>REGISTERED TAGS</Text>
 
         {nav.userTags.length === 0 ? (
-          <View style={s.emptyCard}>
+          <Card padding={0} style={s.emptyCard}>
             <Ionicons name="radio-outline" size={36} color={colors.muted} />
             <Text style={s.emptyTitle}>No tags yet</Text>
             <Text style={s.emptyDesc}>
               Register an NFC tag to verify your physical presence at your focus location.
             </Text>
-          </View>
+          </Card>
         ) : (
           nav.userTags.map(tag => (
-            <TouchableOpacity key={tag._id} style={s.tagCard} onPress={() => openEdit(tag)} activeOpacity={0.7}>
+            <TouchableOpacity key={tag._id} onPress={() => openEdit(tag)} activeOpacity={0.7}>
+              <Card padding={spacing.md} style={s.tagCard}>
               <View style={s.tagIcon}>
                 <Ionicons name="radio-outline" size={20} color={colors.ink} />
               </View>
@@ -227,6 +231,7 @@ export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
                 <Text style={s.tagUid}>{formatUid(tag.tagId.uid)}</Text>
               </View>
               <Ionicons name="checkmark" size={18} color={colors.mutedLight} />
+              </Card>
             </TouchableOpacity>
           ))
         )}
@@ -382,9 +387,11 @@ const s = StyleSheet.create({
   body:         { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.xl },
   sectionLabel: { fontSize: 11, fontWeight: '700', color: colors.muted, letterSpacing: 1.2, marginBottom: 12 },
 
+  // Card surfaces are now the frosted glass <Card>; these keep layout only
+  // (the glass owns the fill; tagCard keeps its own Pale Slate rim).
   emptyCard: {
     alignItems: 'center', paddingVertical: 40, paddingHorizontal: 24,
-    backgroundColor: colors.card, borderRadius: radii.lg,
+    borderRadius: radii.lg,
     marginBottom: spacing.lg, gap: 10,
   },
   emptyTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.ink },
@@ -392,9 +399,9 @@ const s = StyleSheet.create({
 
   tagCard: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.card, borderRadius: radii.lg,
+    borderRadius: radii.lg,
     borderWidth: 1, borderColor: colors.border,
-    padding: spacing.md, marginBottom: spacing.md,
+    marginBottom: spacing.md,
     gap: spacing.md,
   },
   tagIcon: {

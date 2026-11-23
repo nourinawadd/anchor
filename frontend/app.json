@@ -30,7 +30,7 @@
           "UIInterfaceOrientationLandscapeRight"
         ]
       },
-      "buildNumber": "53",
+      "buildNumber": "54",
       "usesAppleSignIn": true,
       "entitlements": {
         "com.apple.developer.family-controls": true
@@ -95,18 +95,14 @@
                 {
                   "bundleIdentifier": "dev.gradproject.anchor.widget",
                   "targetName": "AnchorWidget"
-                },
-                {
-                  "bundleIdentifier": "dev.gradproject.anchor.widget",
-                  "targetName": "AnchorWidget"
                 }
               ]
             }
           }
         },
-        "projectId": "af2d20fd-3851-4e3d-b2b4-935ce3cdfd2b"
+        "projectId": "7ecac53d-60ff-4b8b-88a0-7a5890fa51f3"
       }
     },
-    "owner": "nourinawaddd"
+    "owner": "anchorr"
   }
 }

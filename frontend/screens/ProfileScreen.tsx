@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Alert } from 'react-native';
 import { NavProps } from '../App';
+import Card from '../components/Card';
+import GlassBackdrop from '../components/GlassBackdrop';
 import { apiFetch } from '../api/client';
 import { computeFocusHours, computeLongestStreak } from '../store/sessions';
 import { useResponsive } from '../utils/responsive';
@@ -41,7 +43,9 @@ export default function ProfileScreen({ nav }: { nav: NavProps }) {
     : '—';
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.container, { paddingHorizontal: 20 + sidePadding }]}>
+    <View style={styles.root}>
+      <GlassBackdrop />
+      <ScrollView style={styles.screen} contentContainerStyle={[styles.container, { paddingHorizontal: 20 + sidePadding }]}>
 
       {/* Header */}
       <View style={styles.header}>
@@ -66,7 +70,7 @@ export default function ProfileScreen({ nav }: { nav: NavProps }) {
       {/* Info Cards */}
       <Text style={styles.sectionLabel}>ACCOUNT INFO</Text>
 
-      <View style={styles.card}>
+      <Card padding={0} style={styles.card}>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Full Name</Text>
           <Text style={styles.infoValue}>{user.name}</Text>
@@ -81,24 +85,24 @@ export default function ProfileScreen({ nav }: { nav: NavProps }) {
           <Text style={styles.infoLabel}>Member Since</Text>
           <Text style={styles.infoValue}>{memberSince}</Text>
         </View>
-      </View>
+      </Card>
 
       {/* Stats */}
       <Text style={styles.sectionLabel}>MY STATS</Text>
 
       <View style={styles.statsRow}>
-        <View style={styles.statCard}>
+        <Card padding={16} style={styles.statCard}>
           <Text style={styles.statValue}>{totalSessions}</Text>
           <Text style={styles.statLabel}>Sessions</Text>
-        </View>
-        <View style={styles.statCard}>
+        </Card>
+        <Card padding={16} style={styles.statCard}>
           <Text style={styles.statValue}>{focusHours}h</Text>
           <Text style={styles.statLabel}>Total Focus</Text>
-        </View>
-        <View style={styles.statCard}>
+        </Card>
+        <Card padding={16} style={styles.statCard}>
           <Text style={styles.statValue}>{longestStreak}d</Text>
           <Text style={styles.statLabel}>Best Streak</Text>
-        </View>
+        </Card>
       </View>
 
       {/* Change password — password accounts only (hidden for social-only) */}
@@ -118,12 +122,14 @@ export default function ProfileScreen({ nav }: { nav: NavProps }) {
         <Text style={styles.deleteText}>Delete Account</Text>
       </TouchableOpacity>
 
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F4f4f4' },
+  root: { flex: 1, backgroundColor: '#F4f4f4' },
+  screen: { flex: 1, backgroundColor: 'transparent' },
   container: { padding: 20, paddingTop: Platform.OS === 'ios' ? 60 : 44, paddingBottom: 48 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 },
   menuBtn: { width: 40, height: 40, justifyContent: 'center' },
@@ -143,13 +149,15 @@ const styles = StyleSheet.create({
     fontSize: 11, fontWeight: '600', color: '#2F2F2F',
     letterSpacing: 1.2, marginBottom: 10, marginTop: 4,
   },
-  card: { backgroundColor: '#fff', borderRadius: 14, marginBottom: 20, overflow: 'hidden' },
+  // Card surfaces are now the frosted glass <Card>; these keep only radius +
+  // spacing/alignment (the glass owns the fill and padding).
+  card: { borderRadius: 14, marginBottom: 20, overflow: 'hidden' },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
   rowDivider: { height: 1, backgroundColor: '#C3CAD4', marginHorizontal: 16 },
   infoLabel: { fontSize: 14, color: '#2F2F2F', fontWeight: '500' },
   infoValue: { fontSize: 14, color: '#313852', fontWeight: '600' },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
-  statCard: { flex: 1, backgroundColor: '#fff', borderRadius: 14, padding: 16, alignItems: 'center' },
+  statCard: { flex: 1, borderRadius: 14, alignItems: 'center' },
   statValue: { fontSize: 22, fontWeight: 'bold', color: '#313852', marginBottom: 2 },
   statLabel: { fontSize: 11, color: '#2F2F2F', textAlign: 'center' },
   changePwBtn: {

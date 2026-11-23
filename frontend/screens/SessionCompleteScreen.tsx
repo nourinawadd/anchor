@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
+import Card from '../components/Card';
+import GlassBackdrop from '../components/GlassBackdrop';
 import { colors, fontSize, spacing, radii } from '../constants/theme';
 import { useResponsive } from '../utils/responsive';
 
@@ -54,7 +56,9 @@ export default function SessionCompleteScreen({ nav }: { nav: NavProps }) {
 
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
-    <ScrollView
+    <View style={styles.root}>
+      <GlassBackdrop />
+      <ScrollView
       style={styles.screen}
       contentContainerStyle={[styles.container, { paddingHorizontal: spacing.xl + sidePadding }]}
       showsVerticalScrollIndicator={false}
@@ -74,23 +78,23 @@ export default function SessionCompleteScreen({ nav }: { nav: NavProps }) {
         {/* ── 2×2 Stats Grid ────────────────────────────────────────────────── */}
         <View style={styles.grid}>
           {stats.map(({ value, label }) => (
-            <View key={label} style={styles.statCard}>
+            <Card key={label} padding={0} style={styles.statCard}>
               <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
                 {value}
               </Text>
               <Text style={styles.statLabel}>{label.toUpperCase()}</Text>
-            </View>
+            </Card>
           ))}
         </View>
 
         {/* ── Streak box ────────────────────────────────────────────────────── */}
-        <View style={styles.streakBox}>
+        <Card padding={0} style={styles.streakBox}>
           <Text style={styles.streakLabel}>CURRENT STREAK</Text>
           <View style={styles.streakRow}>
             <Text style={styles.streakValue}>{streak} days</Text>
             <Ionicons name="flame" size={24} color={colors.amber} style={styles.flameIcon} />
           </View>
-        </View>
+        </Card>
 
         {/* ── Primary button ────────────────────────────────────────────────── */}
         <TouchableOpacity
@@ -110,13 +114,15 @@ export default function SessionCompleteScreen({ nav }: { nav: NavProps }) {
           <Text style={styles.secondaryBtnText}>Start Another</Text>
         </TouchableOpacity>
       </Animated.View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  screen:    { flex: 1, backgroundColor: colors.bg },
+  root:      { flex: 1, backgroundColor: colors.bg },
+  screen:    { flex: 1, backgroundColor: 'transparent' },
   container: {
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
@@ -154,9 +160,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm + 2, alignSelf: 'stretch', marginBottom: spacing.md + 2,
   },
   statCard: {
-    // Each card takes exactly half the row minus the gap
+    // Each card takes exactly half the row minus the gap.
+    // Surface is now the frosted glass <Card>; fill removed.
     flexBasis: '47%', flexGrow: 1,
-    backgroundColor: colors.border,
     borderRadius: radii.lg,
     paddingVertical: spacing.xl,
     paddingHorizontal: spacing.md,
@@ -173,12 +179,12 @@ const styles = StyleSheet.create({
 
   // Streak container
   streakBox: {
+    // Surface is now the frosted glass <Card>; keeps its own Pale Slate rim.
     alignSelf: 'stretch',
     borderWidth: 1.5, borderColor: colors.border,
     borderRadius: radii.lg,
     paddingVertical: spacing.lg, paddingHorizontal: spacing.xl,
     marginBottom: spacing.xxl,
-    backgroundColor: colors.white,
   },
   streakLabel: {
     fontSize: fontSize.xs, fontWeight: '600',

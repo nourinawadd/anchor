@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../components/Card';
+import GlassBackdrop from '../components/GlassBackdrop';
 import SectionLabel from '../components/SectionLabel';
 import PillBadge from '../components/PillBadge';
 import { NavProps } from '../App';
@@ -207,6 +208,7 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
 
   return (
     <View style={styles.screen}>
+      <GlassBackdrop />
       {header}
       <ScrollView
         contentContainerStyle={[styles.container, { paddingHorizontal: spacing.xl + sidePadding }]}

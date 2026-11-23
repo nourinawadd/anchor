@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Alert }
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps, SessionRecord } from '../App';
 import Card from '../components/Card';
+import GlassBackdrop from '../components/GlassBackdrop';
 import SectionLabel from '../components/SectionLabel';
 import { colors, fontSize, spacing, radii } from '../constants/theme';
 import { useResponsive } from '../utils/responsive';
@@ -153,6 +154,7 @@ export default function HistoryScreen({ nav }: { nav: NavProps }) {
 
   return (
     <View style={main.screen}>
+      <GlassBackdrop />
 
       {/* ── Fixed header ──────────────────────────────────────────────────── */}
       <View style={main.header}>

@@ -7,6 +7,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps, UserProfile } from '../App';
+import Card from '../components/Card';
+import GlassBackdrop from '../components/GlassBackdrop';
 import { DAILY_GOAL_OPTIONS, WEEKLY_GOAL_OPTIONS } from '../store/user';
 import { colors, fontSize, spacing, radii } from '../constants/theme';
 import { useResponsive } from '../utils/responsive';
@@ -140,7 +142,9 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
   };
 
   return (
-    <ScrollView style={s.screen} contentContainerStyle={[s.container, { paddingHorizontal: spacing.xl + sidePadding }]} showsVerticalScrollIndicator={false}>
+    <View style={s.root}>
+      <GlassBackdrop />
+      <ScrollView style={s.screen} contentContainerStyle={[s.container, { paddingHorizontal: spacing.xl + sidePadding }]} showsVerticalScrollIndicator={false}>
 
       <View style={s.header}>
         <TouchableOpacity style={s.menuBtn} onPress={nav.openDrawer}>
@@ -151,7 +155,8 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
       </View>
 
       <Text style={s.sectionLabel}>PROFILE</Text>
-      <TouchableOpacity style={s.card} activeOpacity={0.7} onPress={() => nav.navigate('Profile')}>
+      <TouchableOpacity activeOpacity={0.7} onPress={() => nav.navigate('Profile')}>
+        <Card padding={0} style={s.card}>
         <View style={s.profileRow}>
           <View style={s.avatar}><Text style={s.avatarTxt}>{initial}</Text></View>
           <View style={s.profileInfo}>
@@ -160,10 +165,11 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
           </View>
           <Ionicons name="chevron-forward" size={18} color={s.rowDesc.color as string} />
         </View>
+        </Card>
       </TouchableOpacity>
 
       <Text style={s.sectionLabel}>FOCUS GOALS</Text>
-      <View style={s.selectCard}>
+      <Card padding={spacing.lg} style={s.selectCard}>
         <Text style={s.rowLabel}>Daily Goal</Text>
         <Text style={s.rowDesc}>Target focus time per day — drives Dashboard progress</Text>
         <ChipRow
@@ -172,8 +178,8 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
           onSelect={v => updateAndSync({ dailyGoalMinutes: v })}
           labelOf={v => DAILY_GOAL_OPTIONS.find(o => o.minutes === v)?.label ?? `${v}m`}
         />
-      </View>
-      <View style={s.selectCard}>
+      </Card>
+      <Card padding={spacing.lg} style={s.selectCard}>
         <Text style={s.rowLabel}>Weekly Goal</Text>
         <Text style={s.rowDesc}>Weekly target — used in Analytics health score</Text>
         <ChipRow
@@ -182,10 +188,10 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
           onSelect={v => updateAndSync({ weeklyGoalMinutes: v })}
           labelOf={v => WEEKLY_GOAL_OPTIONS.find(o => o.minutes === v)?.label ?? `${v}m`}
         />
-      </View>
+      </Card>
 
       <Text style={s.sectionLabel}>SESSION DEFAULTS</Text>
-      <View style={s.selectCard}>
+      <Card padding={spacing.lg} style={s.selectCard}>
         <Text style={s.rowLabel}>Preferred Duration</Text>
         <Text style={s.rowDesc}>Pre-selected when you open Create Session</Text>
         <ChipRow
@@ -194,43 +200,43 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
           onSelect={v => updateAndSync({ preferredDuration: v })}
           labelOf={v => `${v} min`}
         />
-      </View>
-      <View style={s.card}>
+      </Card>
+      <Card padding={0} style={s.card}>
         <ToggleRow
           label="Pomodoro Mode"
           desc="Enable 25 min focus / 5 min break by default"
           value={user.pomodoroEnabled}
           onChange={v => updateAndSync({ pomodoroEnabled: v })}
         />
-      </View>
+      </Card>
 
       {isCalendarSupported() && (
         <>
           <Text style={s.sectionLabel}>INTEGRATIONS</Text>
-          <View style={s.card}>
+          <Card padding={0} style={s.card}>
             <ToggleRow
               label="Sync with Calendar"
               desc="Show today's calendar events on your Dashboard and add completed sessions to a dedicated Anchor calendar"
               value={calendarSyncEnabled}
               onChange={onToggleCalendarSync}
             />
-          </View>
+          </Card>
         </>
       )}
 
       <Text style={s.sectionLabel}>PREFERENCES</Text>
-      <View style={s.card}>
+      <Card padding={0} style={s.card}>
         <ToggleRow
           label="Notifications"
           desc="Master switch — enables all notification types"
           value={user.notificationsEnabled}
           onChange={v => updateAndSync({ notificationsEnabled: v })}
         />
-      </View>
+      </Card>
 
       {user.notificationsEnabled && (<>
         <Text style={s.sectionLabel}>NOTIFICATION TYPES</Text>
-        <View style={s.card}>
+        <Card padding={0} style={s.card}>
           <ToggleRow
             label="Daily start nudge"
             desc="Morning reminder — skipped if you've already started a session"
@@ -267,10 +273,10 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
             value={user.notify.goalAchieved}
             onChange={v => updateAndSync({ notify: { ...user.notify, goalAchieved: v } })}
           />
-        </View>
+        </Card>
 
         {user.notify.dailyNudge && (
-          <View style={s.selectCard}>
+          <Card padding={spacing.lg} style={s.selectCard}>
             <Text style={s.rowLabel}>Start nudge time</Text>
             <Text style={s.rowDesc}>Morning hour for the daily start nudge</Text>
             <ChipRow
@@ -279,11 +285,11 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
               onSelect={v => updateAndSync({ nudgeHour: v })}
               labelOf={fmtHour}
             />
-          </View>
+          </Card>
         )}
 
         {(user.notify.dailySummary || user.notify.goalNudge || user.notify.streakAlert) && (
-          <View style={s.selectCard}>
+          <Card padding={spacing.lg} style={s.selectCard}>
             <Text style={s.rowLabel}>Evening report time</Text>
             <Text style={s.rowDesc}>Hour for the daily summary and goal progress nudge</Text>
             <ChipRow
@@ -292,12 +298,13 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
               onSelect={v => updateAndSync({ reminderHour: v })}
               labelOf={fmtHour}
             />
-          </View>
+          </Card>
         )}
       </>)}
 
       <Text style={s.sectionLabel}>CONNECTED HARDWARE</Text>
-      <TouchableOpacity style={s.card} onPress={() => nav.navigate('NFCSetup', { from: 'Settings' })} activeOpacity={0.75}>
+      <TouchableOpacity onPress={() => nav.navigate('NFCSetup', { from: 'Settings' })} activeOpacity={0.75}>
+        <Card padding={0} style={s.card}>
         <View style={s.linkRow}>
           <View style={s.rowInfo}>
             <Text style={s.rowLabel}>NFC Tags</Text>
@@ -309,14 +316,15 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
           </View>
           <Ionicons name="chevron-forward" size={18} color={s.rowDesc.color as string} />
         </View>
+        </Card>
       </TouchableOpacity>
 
       <Text style={s.sectionLabel}>ACCOUNT</Text>
       <TouchableOpacity
-        style={s.card}
         onPress={() => { setConfirmText(''); setDeleteModal(true); }}
         activeOpacity={0.75}
       >
+        <Card padding={0} style={s.card}>
         <View style={s.linkRow}>
           <View style={s.rowInfo}>
             <Text style={[s.rowLabel, s.dangerLabel]}>Delete Account</Text>
@@ -324,6 +332,7 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
           </View>
           <Ionicons name="trash-outline" size={18} color="#ff0000" />
         </View>
+        </Card>
       </TouchableOpacity>
 
       <View style={{ height: 48 }} />
@@ -371,19 +380,23 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
-  screen:       { flex: 1, backgroundColor: colors.bg },
+  root:         { flex: 1, backgroundColor: colors.bg },
+  screen:       { flex: 1, backgroundColor: 'transparent' },
   container:    { paddingHorizontal: spacing.xl, paddingTop: Platform.OS === 'ios' ? 60 : 44, paddingBottom: 48 },
   header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 },
   menuBtn:      { width: 40, height: 40, justifyContent: 'center' },
   title:        { fontSize: fontSize.xl, fontWeight: '700', color: colors.ink },
   sectionLabel: { fontSize: 11, fontWeight: '700', color: colors.muted, letterSpacing: 1.2, marginBottom: 10, marginTop: 4 },
-  card:         { backgroundColor: colors.card, borderRadius: radii.lg, marginBottom: spacing.lg, overflow: 'hidden', shadowColor: colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  selectCard:   { backgroundColor: colors.card, borderRadius: radii.lg, padding: spacing.lg, marginBottom: spacing.md, shadowColor: colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  // Card surfaces are now the frosted glass <Card>; these keep only radius +
+  // spacing (the glass owns the fill, border and — for selectCard — padding).
+  card:         { borderRadius: radii.lg, marginBottom: spacing.lg, overflow: 'hidden' },
+  selectCard:   { borderRadius: radii.lg, marginBottom: spacing.md },
   profileRow:   { flexDirection: 'row', alignItems: 'center', padding: spacing.lg, gap: spacing.md },
   avatar:       { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.ink, justifyContent: 'center', alignItems: 'center' },
   avatarTxt:    { color: colors.white, fontWeight: '700', fontSize: fontSize.lg },

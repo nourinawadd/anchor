@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
+import Card from '../components/Card';
+import GlassBackdrop from '../components/GlassBackdrop';
 import { colors, fontSize, spacing, radii } from '../constants/theme';
 import { useResponsive } from '../utils/responsive';
 import { apiFetch } from '../api/client';
@@ -110,6 +112,7 @@ export default function AnalyticsScreen({ nav }: { nav: NavProps }) {
 
   return (
     <View style={s.screen}>
+      <GlassBackdrop />
 
       <View style={s.header}>
         <TouchableOpacity style={s.menuBtn} onPress={nav.openDrawer} activeOpacity={0.7}>
@@ -137,7 +140,7 @@ export default function AnalyticsScreen({ nav }: { nav: NavProps }) {
       <ScrollView contentContainerStyle={[s.container, { paddingHorizontal: spacing.xl + sidePadding }]} showsVerticalScrollIndicator={false}>
 
         {/* Focus card + bar chart */}
-        <View style={s.card}>
+        <Card padding={spacing.xl} style={s.card}>
           <View style={s.cardTop}>
             <View>
               <Text style={s.cardLabel}>{chartTitle} Focus</Text>
@@ -153,12 +156,12 @@ export default function AnalyticsScreen({ nav }: { nav: NavProps }) {
             )}
           </View>
           <BarChart data={barData} maxMins={maxMins} progress={progressAnim} />
-        </View>
+        </Card>
 
         {/* Stat pair */}
         <View style={s.row}>
 
-          <View style={[s.card, s.half]}>
+          <Card padding={spacing.xl} style={[s.card, s.half]}>
             <Text style={s.cardLabel}>Completion</Text>
             {hasData ? (
               <Text style={s.bigNum}>{compRate}%</Text>
@@ -168,20 +171,20 @@ export default function AnalyticsScreen({ nav }: { nav: NavProps }) {
                 <Text style={s.sub}>no data</Text>
               </>
             )}
-          </View>
+          </Card>
 
-          <View style={[s.card, s.half]}>
+          <Card padding={spacing.xl} style={[s.card, s.half]}>
             <Text style={s.cardLabel}>Best Time</Text>
             <Text style={[s.bigNum, bestTime === '—' && { color: colors.mutedLight }]}>{bestTime}</Text>
             <Text style={s.sub}>
               {bestTime === '—' ? 'complete sessions' : 'most productive'}
             </Text>
-          </View>
+          </Card>
 
         </View>
 
         {/* Focus Health */}
-        <View style={s.card}>
+        <Card padding={spacing.xl} style={s.card}>
           <Text style={s.cardLabel}>Focus Health</Text>
           {hasData ? (
             <>
@@ -207,7 +210,7 @@ export default function AnalyticsScreen({ nav }: { nav: NavProps }) {
           ) : (
             <Text style={s.emptyMsg}>Complete sessions to build your health score</Text>
           )}
-        </View>
+        </Card>
 
         <View style={{ height: 44 }} />
       </ScrollView>
@@ -262,11 +265,11 @@ const s = StyleSheet.create({
 
   container: { paddingHorizontal: spacing.xl, paddingTop: spacing.xs },
 
+  // Card surface is now the frosted glass <Card>; this keeps only the
+  // radius + spacing so the glass owns the fill, border and padding.
   card: {
-    backgroundColor: colors.card, borderRadius: radii.xl,
-    padding: spacing.xl, marginBottom: spacing.md,
-    shadowColor: colors.black, shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
+    borderRadius: radii.xl,
+    marginBottom: spacing.md,
   },
   cardTop:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   cardLabel:  { fontSize: fontSize.xs, fontWeight: '700', color: colors.muted, letterSpacing: 1, textTransform: 'uppercase', marginBottom: spacing.xs },
