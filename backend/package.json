@@ -10,7 +10,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "ai:eval": "node --env-file=.env scripts/ai-eval.mjs",
-    "migrate": "node scripts/migrate.mjs"
+    "migrate": "node scripts/migrate.mjs",
+    "ai:eval:assistant": "node --env-file-if-exists=.env scripts/orchestrator-eval.mjs"
   },
   "keywords": [],
   "author": "",
