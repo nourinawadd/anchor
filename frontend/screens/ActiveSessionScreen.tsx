@@ -6,12 +6,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
 import {
-  toDateStr, fmtHHMM, normalizeBreakState,
-  type BreakPlan, type RawBreakState, type SessionBreakState,
+  toDateStr, fmtHHMM, normalizeBreakState, recordedBreakMs,
+  type BreakPlan, type BreakRecord, type RawBreakState, type SessionBreakState,
 } from '../store/sessions';
 import CircularProgress from '../components/CircularProgress';
 import { colors, spacing, radii, fontSize } from '../constants/theme';
 import { apiFetch } from '../api/client';
+import { startBreak, endBreak, BreakError } from '../api/breaks';
 import { hLight, hMedium, hSuccess } from '../utils/haptics';
 import { initNFC, readTag, cancelScan, isNFCSupported } from '../utils/nfc';
 import { isPadDevice, useResponsive } from '../utils/responsive';
@@ -45,6 +46,19 @@ function fmt(secs: number) {
 
 type NfcModalPhase = 'scanning' | 'unregistered';
 
+/** A Custom Break in progress on this screen (Countdown only). */
+type CustomBreak = {
+  type: 'PLANNED' | 'ON_DEMAND';
+  plannedIndex: number | null;
+  duration: number;         // minutes
+  savedFocusSecs: number;   // focus time left when the break started; restored after
+  startedAtMs: number;      // wall-clock start (for the local break-time fallback)
+  synced: boolean;          // server confirmed the start (set later for planned breaks)
+};
+type NewBreak = Omit<CustomBreak, 'savedFocusSecs' | 'startedAtMs'>;
+
+const ON_DEMAND_PRESETS = [5, 10, 15];
+
 /** The Custom Breaks plan passed by CreateSession as JSON, or null if none/invalid. */
 function parseBreakPlanParam(raw: string | undefined): BreakPlan | null {
   if (!raw) return null;
@@ -56,7 +70,9 @@ function parseBreakPlanParam(raw: string | undefined): BreakPlan | null {
   }
 }
 
-export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
+// The screen stays mounted for the whole session (App hides it while the user
+// is elsewhere); `visible` is false then, and its popups stay hidden.
+export default function ActiveSessionScreen({ nav, visible = true }: { nav: NavProps; visible?: boolean }) {
   const { isWide } = useResponsive();
   const ringSize    = isWide ? 320 : 250;
   const totalSecs   = parseInt(nav.params.plannedDuration ?? '45') * 60;
@@ -83,6 +99,32 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   // timer, shield and Live Activity start; a rejected plan means no session.
   const awaitsServer = !!breakPlan && !resumeId && !!nav.token;
 
+  // Resuming a Custom Breaks session after an app kill: App passes the recorded
+  // breaks. Read once at mount. `open` is a break still running; `expiredOpen`
+  // one that was open but whose time ran out while the app was dead.
+  const [resumeBreakInfo] = useState(() => {
+    if (isPomo || !breakPlan || !resumeStartedAt) return null;
+    let raw: any = null;
+    try { raw = nav.params.resumeBreaks ? JSON.parse(nav.params.resumeBreaks) : null; } catch { /* ignore */ }
+    const breaks: BreakRecord[] = Array.isArray(raw?.breaks) ? raw.breaks : [];
+    const active: BreakRecord | null = raw?.activeBreak ?? breaks.find(b => b.endedAtISO === null) ?? null;
+    const list = active && !breaks.some(b => b.startedAtISO === active.startedAtISO)
+      ? [...breaks, active]
+      : breaks;
+    const nowMs     = Date.now();
+    const openCapMs = active ? Date.parse(active.startedAtISO) + active.duration * 60_000 : 0;
+    const isOpen    = !!active && nowMs < openCapMs;
+    const closed    = isOpen ? list.filter(b => b.startedAtISO !== active!.startedAtISO) : list;
+    return {
+      list,
+      breakMs:     recordedBreakMs(list, nowMs),     // all break time so far (open one up to now)
+      closedMs:    recordedBreakMs(closed, nowMs),   // excluding a still-running break
+      open:        isOpen ? active : null,
+      openCapMs,
+      expiredOpen: !!active && !isOpen,
+    };
+  });
+
   // Fast-forward the timer to where it would be had the app stayed alive:
   // walk the elapsed wall-clock time through the phase sequence (same scheme
   // as reconcilePomodoro below), banking focus time for finished phases.
@@ -91,6 +133,17 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
       return { phase: 'focus' as const, round: 1, remaining: FOCUS_SECS, banked: 0 };
     }
     let over = (Date.now() - resumeStartedAt.getTime()) / 1000;
+    if (!isPomo && resumeBreakInfo) {
+      // Custom Breaks: focus done = time elapsed − time spent in breaks (pauses
+      // are ignored, exactly like the plan-less recovery below).
+      const focusDone = Math.min(totalSecs, Math.max(0, over - resumeBreakInfo.breakMs / 1000));
+      return {
+        phase:     'focus' as const,
+        round:     1,
+        remaining: Math.max(0, Math.round(totalSecs - focusDone)),
+        banked:    focusDone,
+      };
+    }
     if (!isPomo) {
       return {
         phase:     'focus' as const,
@@ -144,6 +197,60 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   const deadlineRef      = useRef(0);                   // ms timestamp the phase ends
   const focusAccumRef    = useRef(initialState.banked); // committed focus seconds
   const focusRunStartRef = useRef<number | null>(null); // start of the live focus run
+  // Custom Breaks: a focus run never counts past this instant — the moment the
+  // next planned break is due. Always Infinity for Pomodoro / plan-less sessions.
+  const focusCapMsRef    = useRef(Infinity);
+
+  // ── Custom Breaks (Countdown only) ──
+  // A resumed session whose break is still running starts inside that break.
+  const [customBreak,        setCustomBreak]        = useState<CustomBreak | null>(() => {
+    const open = resumeBreakInfo?.open;
+    if (!open || initialState.remaining <= 0) return null;
+    return {
+      type:           open.type,
+      plannedIndex:   open.plannedIndex,
+      duration:       open.duration,
+      savedFocusSecs: initialState.remaining,
+      startedAtMs:    Date.parse(open.startedAtISO),
+      synced:         true,   // the server recorded it
+    };
+  });
+  const [breakRemaining,     setBreakRemaining]     = useState(() =>   // seconds
+    resumeBreakInfo?.open ? Math.max(1, Math.round((resumeBreakInfo.openCapMs - Date.now()) / 1000)) : 0);
+  const [breakSheet,         setBreakSheet]         = useState(false);
+  const [breakBusy,          setBreakBusy]          = useState(false);  // waiting on the server
+  const [customPick,         setCustomPick]         = useState<number | null>(null);
+  const [allowanceExhausted, setAllowanceExhausted] = useState(false);
+  const customBreakRef   = useRef<CustomBreak | null>(customBreak);
+  const breakDeadlineRef = useRef(0);
+  const breakOpsRef      = useRef<Promise<unknown>>(Promise.resolve());
+  // Local tally of breaks taken on this screen — the fallback for the summary
+  // when the server's /end reply has no break totals.
+  // A resumed session starts from its recorded breaks.
+  const localBreaksRef   = useRef({
+    count:    resumeBreakInfo?.list.length ?? 0,
+    closedMs: resumeBreakInfo?.closedMs ?? 0,
+  });
+  // Planned breaks already taken (each happens once); seeded from a resumed record.
+  const takenPlannedRef  = useRef<Set<number>>(new Set(
+    [...(resumeBreakInfo?.list ?? []), ...(breakState?.breaks ?? [])]
+      .filter(b => b.type === 'PLANNED' && b.plannedIndex != null)
+      .map(b => b.plannedIndex as number),
+  ));
+  // The plan in force: the one passed in, else the one the server returned.
+  const plan    = isPomo ? null : (breakPlan ?? breakState?.breakPlan ?? null);
+  const planRef = useRef(plan);
+  planRef.current = plan;
+  // The focus countdown runs only when not paused and not on a Custom Break.
+  // Pomodoro never has a customBreak, so for it this is exactly `running`.
+  const focusRunning = running && !customBreak;
+  // Apps unblock during a Custom Break only if the plan says so (never for Pomodoro).
+  const breakUnlocks = !!customBreak && !!plan?.unlockAppsDuringBreak;
+  // Bumped on foreground (plan sessions only) so the phase alert is rescheduled.
+  const [alertNonce, setAlertNonce] = useState(0);
+  // Shield calls run one at a time, so a quick block→unblock→block can't land out of order.
+  const shieldOpsRef = useRef<Promise<void>>(Promise.resolve());
+  const unmountedRef = useRef(false);
 
   const phaseRef = useRef(phase);
   const roundRef = useRef(round);
@@ -184,6 +291,17 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
     // Resumed sessions already exist server-side — adopt the id, don't re-create.
     if (resumeId) {
       sessionIdRef.current = resumeId;
+      // A break that ran out while the app was dead: close it (the server may
+      // already have, hence NO_OPEN_BREAK is fine). Focus resumes meanwhile.
+      if (resumeBreakInfo?.expiredOpen) {
+        enqueueBreakOp(() => endBreak(resumeId, nav.token))
+          .then(setBreakState)
+          .catch(e => {
+            if (!(e instanceof BreakError && e.code === 'NO_OPEN_BREAK')) {
+              console.warn('[breaks] failed to close expired break on resume', e);
+            }
+          });
+      }
       return;
     }
     if (!nav.token) return;
@@ -227,7 +345,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
           Alert.alert(
             "Couldn't start session",
             err.message || 'The server rejected this session’s break plan.',
-            [{ text: 'OK', onPress: () => nav.navigate('CreateSession') }],
+            [{ text: 'OK', onPress: () => { nav.endLiveSession(); nav.navigate('CreateSession'); } }],
             { cancelable: false },
           );
         } else {
@@ -243,11 +361,15 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   // breaks. Pausing mid-focus keeps the block (a pause is not a break). Round
   // is a dep so a background catch-up that lands on the same phase value (e.g.
   // focus→break→focus) still re-asserts the shield on foreground.
+  // Custom Breaks: apps stay blocked during a break unless the plan unlocks them
+  // (breakUnlocks); they're blocked again as soon as focus resumes.
   useEffect(() => {
     if (!screenTimeSupported() || creating) return;   // nothing is blocked until the server accepts
-    (async () => {
+    const block = phase === 'focus' && !breakUnlocks;
+    shieldOpsRef.current = shieldOpsRef.current.then(async () => {
+      if (unmountedRef.current) return;   // session over — never re-block after leaving
       try {
-        if (phase === 'focus') {
+        if (block) {
           if (!shieldAppliedRef.current && await screenTimeHasSelection()) {
             await applyScreenTimeShield();
             shieldAppliedRef.current = true;
@@ -261,8 +383,8 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
       } catch {
         // Authorization revoked or no selection — silently skip, session continues
       }
-    })();
-  }, [phase, round, creating]);
+    });
+  }, [phase, round, creating, breakUnlocks]);
 
   // How many apps the user has shielded (for the "N apps blocked" card).
   useEffect(() => {
@@ -271,11 +393,19 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   }, []);
 
   // Always lift the shield when the screen unmounts (session ended).
+  // Queued behind any pending shield call, so an in-flight block can't outlive the session.
   useEffect(() => () => {
+    unmountedRef.current = true;
     if (shieldAppliedRef.current) {
       clearScreenTimeShield().catch(() => {});
       shieldAppliedRef.current = false;
     }
+    shieldOpsRef.current = shieldOpsRef.current.then(async () => {
+      if (shieldAppliedRef.current) {
+        await clearScreenTimeShield().catch(() => {});
+        shieldAppliedRef.current = false;
+      }
+    });
   }, []);
 
   // Live Activity (Lock Screen / Dynamic Island timer): started once per mount
@@ -285,15 +415,17 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   // A session awaiting server acceptance starts it once `creating` clears.
   useEffect(() => {
     if (!liveActivitySupported() || initialState.remaining <= 0 || creating) return;
+    // Resumed inside a Custom Break: start in the break phase, not focus.
+    const inBreak = !!customBreakRef.current;
     startLiveActivity({
       sessionName,
       isPomo,
       maxRounds,
-      phase:         initialState.phase,
+      phase:         inBreak ? 'break' : initialState.phase,
       round:         initialState.round,
-      endDateMs:     Date.now() + initialState.remaining * 1000,
+      endDateMs:     Date.now() + (inBreak ? breakRemaining : initialState.remaining) * 1000,
       paused:        false,
-      remainingSecs: initialState.remaining,
+      remainingSecs: inBreak ? breakRemaining : initialState.remaining,
     }).catch(() => {});
     return () => { endLiveActivity().catch(() => {}); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -313,7 +445,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   // be recorded with however long it took to return to the app.
   const liveRunSecs = () => {
     if (focusRunStartRef.current == null) return 0;
-    const end = Math.min(Date.now(), deadlineRef.current);
+    const end = Math.min(Date.now(), deadlineRef.current, focusCapMsRef.current);
     return Math.max(0, (end - focusRunStartRef.current) / 1000);
   };
   const commitFocus = () => {
@@ -321,6 +453,152 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
     focusRunStartRef.current = null;
   };
   const focusElapsedSecs = () => Math.round(focusAccumRef.current + liveRunSecs());
+
+  // ─── Custom Breaks (Countdown only — every helper is a no-op for Pomodoro) ────
+  // Server calls run one at a time, so an "end" can never overtake its "start".
+  const enqueueBreakOp = <T,>(fn: () => Promise<T>): Promise<T> => {
+    const run = breakOpsRef.current.then(fn, fn);
+    breakOpsRef.current = run.catch(() => {});
+    return run;
+  };
+
+  /** Index of the earliest planned break not yet taken, or null. */
+  const nextPlannedIndex = (): number | null => {
+    const list = planRef.current?.planned ?? [];
+    let best: number | null = null;
+    list.forEach((b, i) => {
+      if (takenPlannedRef.current.has(i)) return;
+      if (best === null || b.startAfter < list[best].startAfter) best = i;
+    });
+    return best;
+  };
+
+  /** Wall-clock instant the next planned break falls due, for a focus run starting now. */
+  const plannedCapMs = (): number => {
+    if (isPomo) return Infinity;
+    const i = nextPlannedIndex();
+    if (i === null) return Infinity;
+    const thresholdSecs = planRef.current!.planned[i].startAfter * 60;
+    return Date.now() + Math.max(0, thresholdSecs - focusAccumRef.current) * 1000;
+  };
+
+  /** Switch to a break: freeze the focus time left at exactly where it stands. */
+  const beginBreak = (b: NewBreak): CustomBreak => {
+    // Focus ends now — or at the planned break's due time if that passed while
+    // the app was backgrounded (the gap counts as neither focus nor break).
+    const endMs = Math.min(Date.now(), focusCapMsRef.current, deadlineRef.current);
+    const saved = Math.max(0, Math.round((deadlineRef.current - endMs) / 1000));
+    focusCapMsRef.current = endMs;   // the focus run is banked up to endMs exactly
+    const cb: CustomBreak = { ...b, savedFocusSecs: saved, startedAtMs: Date.now() };
+    if (cb.type === 'PLANNED' && cb.plannedIndex !== null) takenPlannedRef.current.add(cb.plannedIndex);
+    localBreaksRef.current.count += 1;
+    customBreakRef.current = cb;
+    setCustomBreak(cb);
+    setBreakRemaining(cb.duration * 60);
+    setRemaining(saved);
+    hLight();
+    return cb;
+  };
+
+  /** Tell the server a planned break started; one retry, then carry on locally. */
+  const syncPlannedStart = (cb: CustomBreak) => {
+    const id = sessionIdRef.current;
+    if (!id || cb.plannedIndex === null) return;
+    enqueueBreakOp(async () => {
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          setBreakState(await startBreak(id, { type: 'PLANNED', plannedIndex: cb.plannedIndex! }, nav.token));
+          cb.synced = true;   // read by syncEnd; not rendered
+          return;
+        } catch (e) {
+          if (attempt === 2) console.warn('[breaks] server did not record planned break; continuing locally', e);
+        }
+      }
+    });
+  };
+
+  /** Tell the server the break ended. It caps breaks itself, so NO_OPEN_BREAK is fine. */
+  const syncEnd = (cb: CustomBreak) => {
+    const id = sessionIdRef.current;
+    if (!id) return;
+    enqueueBreakOp(async () => {
+      if (!cb.synced) return;   // the server never knew about this break
+      try {
+        setBreakState(await endBreak(id, nav.token));
+      } catch (e) {
+        if (!(e instanceof BreakError && e.code === 'NO_OPEN_BREAK')) {
+          console.warn('[breaks] failed to end break on server', e);
+        }
+      }
+    });
+  };
+
+  /** Start the next planned break if focus time has reached it. True if it did. */
+  const startDuePlannedBreak = (): boolean => {
+    if (isPomo || customBreakRef.current || focusRunStartRef.current == null) return false;
+    if (Date.now() < focusCapMsRef.current) return false;
+    const i = nextPlannedIndex();
+    if (i === null) return false;
+    const cb = beginBreak({
+      type: 'PLANNED', plannedIndex: i, duration: planRef.current!.planned[i].duration, synced: false,
+    });
+    syncPlannedStart(cb);
+    return true;
+  };
+
+  /** Time spent on a break so far — wall clock, capped at its length (as the server counts it). */
+  const breakSpentMs = (cb: CustomBreak) =>
+    Math.max(0, Math.min(Date.now() - cb.startedAtMs, cb.duration * 60_000));
+
+  /** End the open break and resume focus with exactly the time that was left. */
+  const finishBreak = () => {
+    const cb = customBreakRef.current;
+    if (!cb) return;
+    customBreakRef.current = null;
+    localBreaksRef.current.closedMs += breakSpentMs(cb);
+    setCustomBreak(null);
+    setBreakRemaining(0);
+    setRemaining(cb.savedFocusSecs);
+    hLight();
+    syncEnd(cb);
+    // The focus timer effect restarts now; a planned break already due fires on its first tick.
+  };
+
+  /** On-demand break: starts only once the server confirms it. */
+  const takeOnDemandBreak = async (minutes: number) => {
+    const id = sessionIdRef.current;
+    if (!id) {
+      Alert.alert("Can't take a break right now", "This session isn't connected to the server yet. Try again in a moment.");
+      return;
+    }
+    setBreakBusy(true);
+    try {
+      const state = await enqueueBreakOp(() =>
+        startBreak(id, { type: 'ON_DEMAND', duration: minutes }, nav.token));
+      setBreakState(state);
+      setBreakSheet(false);
+      setCustomPick(null);
+      const cb: NewBreak = { type: 'ON_DEMAND', plannedIndex: null, duration: minutes, synced: true };
+      if (!customBreakRef.current && focusRunStartRef.current != null) {
+        beginBreak(cb);
+      } else {
+        // Focus stopped while we waited (rare) — don't leave the server's break open.
+        syncEnd({ ...cb, savedFocusSecs: 0, startedAtMs: Date.now() });
+      }
+    } catch (e) {
+      const err = e instanceof BreakError ? e : new BreakError('UNKNOWN');
+      if (err.code === 'ALLOWANCE_EXCEEDED') {
+        setAllowanceExhausted(true);
+        setBreakSheet(false);
+        setCustomPick(null);
+        Alert.alert('No breaks left', "You've used all your breaks for this session. You're doing great, keep going!");
+      } else {
+        Alert.alert("Couldn't start your break", err.message);
+      }
+    } finally {
+      setBreakBusy(false);
+    }
+  };
 
   // Catch up the Pomodoro state when one or more phase deadlines passed while
   // backgrounded — a long absence can skip a whole focus+break (or more), not
@@ -371,11 +649,17 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   // setInterval is suspended while the app is backgrounded, so tick-counting
   // would freeze and undercount. Anchoring to Date.now() means the timer
   // reflects real elapsed time the moment we recompute (next tick / foreground).
+  // Custom Breaks: this runs only while `focusRunning` (not on a break); each
+  // tick first checks whether a planned break is due (always false for Pomodoro).
   useEffect(() => {
-    if (!running) return;
+    if (!focusRunning) return;
     deadlineRef.current = Date.now() + remaining * 1000;
-    if (phase === 'focus') focusRunStartRef.current = Date.now();
+    if (phase === 'focus') {
+      focusRunStartRef.current = Date.now();
+      focusCapMsRef.current    = plannedCapMs();
+    }
     const id = setInterval(() => {
+      if (startDuePlannedBreak()) { clearInterval(id); return; }
       const left = Math.max(0, Math.round((deadlineRef.current - Date.now()) / 1000));
       setRemaining(prev => {
         if (left < prev) pulseTick();
@@ -389,7 +673,21 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   // `round` is included so a catch-up that lands on the same phase value (e.g.
   // focus→break→focus) still re-anchors the deadline for the new phase.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [running, phase, round]);
+  }, [focusRunning, phase, round]);
+
+  // Custom Break countdown — wall-clock anchored like the focus timer. Pausing
+  // (running=false) stops it and keeps breakRemaining frozen; resuming re-anchors.
+  useEffect(() => {
+    if (!customBreak || !running) return;
+    breakDeadlineRef.current = Date.now() + breakRemaining * 1000;
+    const id = setInterval(() => {
+      const left = Math.max(0, Math.round((breakDeadlineRef.current - Date.now()) / 1000));
+      setBreakRemaining(left);
+      if (left <= 0) { clearInterval(id); finishBreak(); }
+    }, 250);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customBreak, running]);
 
   // What the user should be told when the current phase's deadline arrives.
   const nextPhaseAlert = (): { title: string; body: string } | null => {
@@ -406,19 +704,51 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
       : { title: 'Session complete! 🎯', body: 'You finished all your rounds — tap to see your results.' };
   };
 
-  // Schedule a local notification at the phase deadline so a break / resume /
-  // completion still alerts the user while the app is backgrounded. Re-runs per
-  // phase; the timer effect above re-anchors deadlineRef first (same deps).
+  // The single alert to hold right now. Pomodoro / plan-less: the phase-deadline
+  // alert, exactly as before. Custom Breaks (Countdown): during focus, whichever
+  // comes first of "Break starting" and session complete; during a break, a
+  // heads-up 1 min before it ends (30 s for breaks of 2 min or less).
+  const nextAlert = (): { date: Date; title: string; body: string } | null => {
+    const cb = customBreakRef.current;
+    if (cb) {
+      const leadSecs = cb.duration <= 2 ? 30 : 60;
+      return {
+        date:  new Date(breakDeadlineRef.current - leadSecs * 1000),
+        title: leadSecs === 60 ? 'Break ends in 1 minute ⏳' : 'Break ends in 30 seconds ⏳',
+        body:  'Get ready to jump back into focus.',
+      };
+    }
+    if (!isPomo && phase === 'focus' && focusCapMsRef.current < deadlineRef.current) {
+      const i = nextPlannedIndex();
+      if (i !== null) {
+        const mins = planRef.current!.planned[i].duration;
+        return {
+          date:  new Date(focusCapMsRef.current),
+          title: 'Break starting 🌿',
+          body:  `Your ${mins}-min break starts now. Open Anchor to begin it.`,
+        };
+      }
+    }
+    const msg = nextPhaseAlert();
+    return msg ? { date: new Date(deadlineRef.current), ...msg } : null;
+  };
+
+  // Schedule a local notification so a break / resume / completion still alerts
+  // the user while the app is backgrounded. There's one slot, so it's replaced
+  // at every change. The timer and break effects above re-anchor their deadlines
+  // first (declared earlier, overlapping deps). For Pomodoro `focusRunning` is
+  // `running`, customBreak stays null and alertNonce never changes, so it
+  // fires exactly as before.
   useEffect(() => {
-    if (running && nav.user.notificationsEnabled) {
-      const msg = nextPhaseAlert();
-      if (msg) scheduleSessionAlert(new Date(deadlineRef.current), msg.title, msg.body);
+    if (running && (focusRunning || customBreak) && nav.user.notificationsEnabled) {
+      const a = nextAlert();
+      if (a) scheduleSessionAlert(a.date, a.title, a.body);
       else cancelSessionAlert();
     } else {
       cancelSessionAlert();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [running, phase, round, nav.user.notificationsEnabled]);
+  }, [running, focusRunning, phase, round, customBreak, alertNonce, nav.user.notificationsEnabled]);
 
   // Cancel any pending phase alert when leaving the screen (session ended/unmounted).
   useEffect(() => () => { cancelSessionAlert(); }, []);
@@ -429,17 +759,48 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   // so a running update always carries a fresh deadline. Pausing — and
   // completion, which lands here as running=false with remaining 0 — freezes
   // the widget on remainingSecs.
+  // Custom Break: the widget shows the break phase counting down to the break's
+  // end (frozen while paused), and switches back to focus when it ends. For
+  // Pomodoro customBreak is always null and focusRunning === running.
   useEffect(() => {
     if (!liveActivitySupported() || creating) return;
+    if (customBreak) {
+      updateLiveActivity({
+        phase:         'break',
+        round,
+        endDateMs:     running ? breakDeadlineRef.current : Date.now() + breakRemaining * 1000,
+        paused:        !running,
+        remainingSecs: breakRemaining,
+      }).catch(() => {});
+      return;
+    }
     updateLiveActivity({
       phase,
       round,
-      endDateMs:     running ? deadlineRef.current : Date.now() + remaining * 1000,
-      paused:        !running,
+      endDateMs:     focusRunning ? deadlineRef.current : Date.now() + remaining * 1000,
+      paused:        !focusRunning,
       remainingSecs: remaining,
     }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [running, phase, round]);
+  }, [running, focusRunning, phase, round, customBreak]);
+
+  // Report the timer to App for the floating "session in progress" pill, at the
+  // same transitions as the Live Activity (the deadlines above are fresh by now).
+  useEffect(() => {
+    const frozen = (label: 'Paused' | 'Starting…' | 'Complete', secs: number) =>
+      nav.reportSession({ name: sessionName, label, endsAtMs: null, frozenSecs: secs });
+    if (creating)            frozen('Starting…', remaining);
+    else if (remaining <= 0 && !customBreak) frozen('Complete', 0);
+    else if (!running)       frozen('Paused', customBreak ? breakRemaining : remaining);
+    else if (customBreak)    nav.reportSession({ name: sessionName, label: 'Break', endsAtMs: breakDeadlineRef.current, frozenSecs: 0 });
+    else nav.reportSession({
+      name: sessionName,
+      label: phase === 'break' ? 'Break' : 'Focus',   // Pomodoro break phase too
+      endsAtMs: deadlineRef.current,
+      frozenSecs: 0,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, focusRunning, phase, round, customBreak, creating, remaining <= 0]);
 
   // Snap the timer to real elapsed time the instant we return to foreground
   // (don't wait for the next tick). For Pomodoro, reconcile any phases that
@@ -447,7 +808,17 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'active' || !running) return;
+      // Plan sessions: reschedule the alert on return (batched with the updates below).
+      if (planRef.current) setAlertNonce(n => n + 1);
+      // Custom Break open: catch its countdown up (it may have run out while away).
+      if (customBreakRef.current) {
+        const left = Math.max(0, Math.round((breakDeadlineRef.current - Date.now()) / 1000));
+        setBreakRemaining(left);
+        if (left <= 0) finishBreak();
+        return;
+      }
       if (isPomo && reconcilePomodoro()) return;
+      if (startDuePlannedBreak()) return;   // Countdown: a planned break fell due while away
       setRemaining(Math.max(0, Math.round((deadlineRef.current - Date.now()) / 1000)));
     });
     return () => sub.remove();
@@ -494,13 +865,22 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
     const endedAt = new Date();
     const finalStatus = remaining === 0 ? 'COMPLETED' : 'ABANDONED';
 
+    // Custom Breaks. Ending mid-break just ends the session — the server closes
+    // the break itself, so no endBreak call. Clearing the ref stops the break
+    // countdown / foreground handler from ending it during the request below.
+    const openBreak = customBreakRef.current;
+    customBreakRef.current = null;
+    const local = localBreaksRef.current;
+    let breaksTaken  = local.count;
+    let breakMinutes = Math.round((local.closedMs + (openBreak ? breakSpentMs(openBreak) : 0)) / 60_000);
+
     let finalScore = score;
     let streak     = '0';
 
     if (nav.token && sessionIdRef.current) {
       try {
         const res = await apiFetch<{
-          session: { focusScore: number | null };
+          session: { focusScore: number | null; breakMinutes?: number; breaksTaken?: number };
           streak: number;
           distractionCount?: number;
         }>(
@@ -518,6 +898,9 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
         finalScore      = res.session.focusScore ?? score;
         streak          = String(res.streak);
         distractionsVal = res.distractionCount ?? 0;
+        // Server's break totals win; a server without break support omits them.
+        if (typeof res.session.breaksTaken  === 'number') breaksTaken  = res.session.breaksTaken;
+        if (typeof res.session.breakMinutes === 'number') breakMinutes = res.session.breakMinutes;
         nav.refreshSessions();
       } catch {
         // Network failure — continue with local values
@@ -534,6 +917,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
     }
 
     finalStatus === 'COMPLETED' ? hSuccess() : hMedium();
+    nav.endLiveSession();   // the session is over: App unmounts this screen as we leave
     nav.navigate('SessionComplete', {
       ...nav.params,
       actualMinutes: String(actualMinutes),
@@ -541,6 +925,10 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
       blockedCount:  String(stCount > 0 ? stCount : blockedApps.length),
       distractions:  String(distractionsVal),
       streak,
+      // Always set (0 when none) so a previous session's values can't carry over
+      // through the merged nav params. Pomodoro breaks aren't Custom Breaks.
+      breaksTaken:   String(isPomo ? 0 : breaksTaken),
+      breakMinutes:  String(isPomo ? 0 : breakMinutes),
     });
   };
 
@@ -594,13 +982,28 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   };
 
   const phaseDuration = phase === 'focus' ? FOCUS_SECS : BREAK_SECS;
-  const progress      = phaseDuration > 0 ? remaining / phaseDuration : 0;
+  const progress      = customBreak
+    ? breakRemaining / Math.max(1, customBreak.duration * 60)
+    : phaseDuration > 0 ? remaining / phaseDuration : 0;
 
   // Top-right lock indicator: green while focus apps are shielded, otherwise
-  // reflects the paused / break state.
-  const locked    = running && phase === 'focus';
+  // reflects the paused / break state. (A Custom Break counts as a break.)
+  const locked    = focusRunning && phase === 'focus';
   const lockLabel = creating ? 'Starting…' : locked ? 'Locked' : !running ? 'Paused' : 'Break';
   const lockColor = locked ? colors.success : !running ? colors.mutedLight : colors.amber;
+
+  // On-demand allowance. Values come from the server's last reply; before the
+  // first reply the full allowance from the plan applies. null = no limit.
+  const allowance     = plan?.allowance ?? null;
+  const allowanceLeft = allowance
+    ? (breakState?.allowanceRemaining ?? { breaks: allowance.maxBreaks, minutes: allowance.maxMinutes })
+    : null;
+  const odMinutesLeft = allowanceLeft ? Math.min(60, allowanceLeft.minutes ?? 60) : 0;   // one break ≤ 60
+  const odBreaksLeft  = allowanceLeft ? (allowanceLeft.breaks ?? Infinity) : 0;
+  const allowanceUsedUp = !!allowance && (allowanceExhausted || odBreaksLeft <= 0 || odMinutesLeft < 1);
+  const showTakeBreak = !!allowance && !allowanceUsedUp && !customBreak
+    && focusRunning && phase === 'focus' && remaining > 0 && !creating;
+  const customValue = customPick ?? Math.min(5, odMinutesLeft);
 
   // Meta line under the session name, e.g. "Study · 45 min · Pomodoro 2/3".
   const categoryName = nav.user.categories?.find(c => c.id === nav.params.categoryId)?.name || 'Focus';
@@ -619,6 +1022,8 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   // server-side scoring heuristic.
   const riskLevel = !running
     ? 'PAUSED'
+    : customBreak
+    ? 'ON BREAK'
     : (() => {
         const d = Math.floor(focusElapsedSecs() / 60 / 20);
         return d <= 0 ? 'LOW' : d === 1 ? 'MEDIUM' : 'HIGH';
@@ -628,7 +1033,17 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
     <View style={styles.screen}>
 
       <View style={styles.topBar}>
-        <Text style={styles.modeLabel}>FOCUS MODE</Text>
+        <View style={styles.topLeft}>
+          {/* Minimise: browse the app while the session keeps running. */}
+          <TouchableOpacity
+            onPress={() => { hLight(); nav.navigate('Dashboard'); }}
+            hitSlop={10}
+            accessibilityLabel="Minimise session"
+          >
+            <Ionicons name="chevron-down" size={22} color="rgba(255,255,255,0.75)" />
+          </TouchableOpacity>
+          <Text style={styles.modeLabel}>FOCUS MODE</Text>
+        </View>
         <View style={styles.lockWrap}>
           <View style={[styles.lockDot, { backgroundColor: lockColor }]} />
           <Text style={[styles.lockLabel, { color: lockColor }]}>{lockLabel}</Text>
@@ -645,15 +1060,18 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
           style={styles.ring}
         >
           <Animated.Text style={[styles.timerText, { transform: [{ scale: tickAnim }] }]}>
-            {fmt(remaining)}
+            {fmt(customBreak ? breakRemaining : remaining)}
           </Animated.Text>
           <Text style={styles.timerSub}>
-            {remaining === 0 ? 'COMPLETE' : phase === 'break' ? 'BREAK' : 'REMAINING'}
+            {customBreak ? 'BREAK' : remaining === 0 ? 'COMPLETE' : phase === 'break' ? 'BREAK' : 'REMAINING'}
           </Text>
         </CircularProgress>
 
         <Text style={styles.sessionName} numberOfLines={2} ellipsizeMode="tail">{sessionName}</Text>
         <Text style={styles.metaLine}>{metaLine}</Text>
+        {customBreak && (
+          <Text style={styles.metaLine}>Focus resumes with {fmt(customBreak.savedFocusSecs)} left</Text>
+        )}
 
         {isPomo && maxRounds > 1 && (
           <View style={styles.dotsRow}>
@@ -676,6 +1094,28 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
             <Text style={styles.pausePillText}>{running ? 'Pause' : 'Resume'}</Text>
           </TouchableOpacity>
 
+          {customBreak && (
+            <TouchableOpacity
+              style={styles.pausePill}
+              onPress={finishBreak}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="play-skip-forward" size={13} color={colors.white} />
+              <Text style={styles.pausePillText}>End break</Text>
+            </TouchableOpacity>
+          )}
+
+          {showTakeBreak && (
+            <TouchableOpacity
+              style={styles.pausePill}
+              onPress={() => { hLight(); setCustomPick(null); setBreakSheet(true); }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="cafe-outline" size={13} color={colors.white} />
+              <Text style={styles.pausePillText}>Take a break</Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             style={styles.stopPill}
             onPress={() => { hMedium(); hasNfc ? openNfcEndModal() : confirmEnd(); }}
@@ -686,6 +1126,10 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
             <Text style={styles.stopPillText}>Stop</Text>
           </TouchableOpacity>
         </View>
+
+        {allowance && allowanceUsedUp && !customBreak && remaining > 0 && (
+          <Text style={styles.breakNote}>You've used all your breaks for this session. Keep it up!</Text>
+        )}
 
         <View style={styles.blockedCard}>
           <Ionicons name="lock-closed-outline" size={18} color={colors.mutedLight} style={styles.blockedIcon} />
@@ -705,8 +1149,105 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
         </View>
       </View>
 
+      {/* Take-a-break sheet (on-demand Custom Break) */}
+      <Modal
+        visible={breakSheet && visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { if (!breakBusy) setBreakSheet(false); }}
+      >
+        <View style={styles.sheetOverlay}>
+          <View style={styles.sheetCard}>
+            <Text style={styles.modalTitle}>Take a break</Text>
+            <Text style={styles.modalSub}>
+              {allowanceLeft?.minutes == null
+                ? 'How long do you need?'
+                : `${allowanceLeft.minutes} break minute${allowanceLeft.minutes === 1 ? '' : 's'} left`}
+              {allowanceLeft?.breaks != null
+                ? ` · ${allowanceLeft.breaks} break${allowanceLeft.breaks === 1 ? '' : 's'} left`
+                : ''}
+            </Text>
+
+            <View style={styles.sheetOptions}>
+              {ON_DEMAND_PRESETS.map(m => {
+                const off = m > odMinutesLeft || breakBusy;
+                return (
+                  <TouchableOpacity
+                    key={m}
+                    style={[styles.sheetChip, off && styles.sheetChipDisabled]}
+                    onPress={() => { hLight(); takeOnDemandBreak(m); }}
+                    disabled={off}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.sheetChipText}>{m} min</Text>
+                  </TouchableOpacity>
+                );
+              })}
+              <TouchableOpacity
+                style={[
+                  styles.sheetChip,
+                  customPick !== null && styles.sheetChipActive,
+                  breakBusy && styles.sheetChipDisabled,
+                ]}
+                onPress={() => { hLight(); setCustomPick(customPick === null ? customValue : null); }}
+                disabled={breakBusy}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.sheetChipText, customPick !== null && styles.sheetChipTextActive]}>Custom</Text>
+              </TouchableOpacity>
+            </View>
+
+            {customPick !== null && (
+              <View style={styles.sheetStepper}>
+                <TouchableOpacity
+                  style={[styles.sheetStepBtn, (customValue <= 1 || breakBusy) && styles.sheetChipDisabled]}
+                  onPress={() => { hLight(); setCustomPick(Math.max(1, customValue - 1)); }}
+                  disabled={customValue <= 1 || breakBusy}
+                  hitSlop={6}
+                  accessibilityLabel="Shorter break"
+                >
+                  <Ionicons name="remove" size={18} color={colors.ink} />
+                </TouchableOpacity>
+                <Text style={styles.sheetStepValue}>{customValue} min</Text>
+                <TouchableOpacity
+                  style={[styles.sheetStepBtn, (customValue >= odMinutesLeft || breakBusy) && styles.sheetChipDisabled]}
+                  onPress={() => { hLight(); setCustomPick(Math.min(odMinutesLeft, customValue + 1)); }}
+                  disabled={customValue >= odMinutesLeft || breakBusy}
+                  hitSlop={6}
+                  accessibilityLabel="Longer break"
+                >
+                  <Ionicons name="add" size={18} color={colors.ink} />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => { setBreakSheet(false); setCustomPick(null); }}
+                disabled={breakBusy}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              {customPick !== null && (
+                <TouchableOpacity
+                  style={[styles.modalSkipBtn, (breakBusy || customValue < 1) && { opacity: 0.6 }]}
+                  onPress={() => takeOnDemandBreak(customValue)}
+                  disabled={breakBusy || customValue < 1}
+                >
+                  <Text style={styles.modalSkipText}>{breakBusy ? 'Starting…' : `Start ${customValue} min`}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            {breakBusy && customPick === null && (
+              <Text style={styles.sheetBusy}>Starting your break…</Text>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       {/* NFC end-session modal */}
-      <Modal visible={nfcModal} transparent animationType="fade">
+      <Modal visible={nfcModal && visible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             {nfcPhase === 'scanning' && (
@@ -764,6 +1305,7 @@ const styles = StyleSheet.create({
   },
 
   topBar:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  topLeft:    { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   modeLabel:  { fontSize: fontSize.xs, fontWeight: '600', color: 'rgba(255,255,255,0.55)', letterSpacing: 1.5 },
   lockWrap:   { flexDirection: 'row', alignItems: 'center', gap: 6 },
   lockDot:    { width: 7, height: 7, borderRadius: 4 },
@@ -783,7 +1325,8 @@ const styles = StyleSheet.create({
   dotEmpty:   { borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.35)' },
 
   bottom:     { alignSelf: 'center', width: '100%', maxWidth: 460 },
-  controlRow: { flexDirection: 'row', justifyContent: 'center', gap: spacing.md, marginBottom: spacing.xl },
+  controlRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing.md, marginBottom: spacing.xl },
+  breakNote:  { fontSize: fontSize.sm, color: 'rgba(255,255,255,0.6)', textAlign: 'center', marginTop: -spacing.md, marginBottom: spacing.lg },
   pausePill:  {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingVertical: 9, paddingHorizontal: spacing.xl,
@@ -839,4 +1382,26 @@ const styles = StyleSheet.create({
   modalCancelText: { fontSize: fontSize.md, fontWeight: '600', color: colors.inkSoft },
   modalSkipBtn:   { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: radii.md, backgroundColor: colors.ink },
   modalSkipText:  { fontSize: fontSize.md, fontWeight: '700', color: colors.white },
+
+  // Take-a-break sheet — the end-session modal's card, docked to the bottom.
+  sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
+  sheetCard: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl,
+    padding: 28, paddingBottom: Platform.OS === 'ios' ? 44 : 28,
+    alignItems: 'center', width: '100%', maxWidth: 520, alignSelf: 'center',
+  },
+  sheetOptions:      { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing.sm + 2, marginBottom: spacing.lg },
+  sheetChip:         { paddingVertical: spacing.sm, paddingHorizontal: 18, borderRadius: radii.full, backgroundColor: colors.border },
+  sheetChipActive:   { backgroundColor: colors.ink },
+  sheetChipDisabled: { opacity: 0.4 },
+  sheetChipText:     { fontSize: fontSize.sm + 1, fontWeight: '600', color: colors.inkSoft },
+  sheetChipTextActive: { color: colors.white },
+  sheetStepper:      { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginBottom: spacing.lg },
+  sheetStepBtn:      {
+    width: 36, height: 36, borderRadius: radii.full, backgroundColor: colors.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  sheetStepValue:    { minWidth: 72, textAlign: 'center', fontSize: fontSize.lg, fontWeight: '700', color: colors.ink },
+  sheetBusy:         { fontSize: fontSize.sm, color: colors.muted, marginTop: spacing.md },
 });

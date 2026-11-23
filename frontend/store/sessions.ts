@@ -89,6 +89,19 @@ export function normalizeBreakState(raw: RawBreakState | null | undefined): Sess
   };
 }
 
+/** Milliseconds spent in these breaks as of `nowMs`: each from its start to its
+ *  end (or now, if still open), capped at its length — the same rule the server
+ *  (and the mock) use. */
+export function recordedBreakMs(breaks: BreakRecord[], nowMs: number): number {
+  return breaks.reduce((acc, b) => {
+    const start = Date.parse(b.startedAtISO);
+    if (!Number.isFinite(start)) return acc;
+    const end = b.endedAtISO ? Date.parse(b.endedAtISO) : nowMs;
+    const cap = start + b.duration * 60_000;
+    return acc + Math.max(0, Math.min(Number.isFinite(end) ? end : nowMs, cap, nowMs) - start);
+  }, 0);
+}
+
 /** Fill in safe defaults for Custom Breaks fields the backend doesn't return yet. */
 export function normalizeBreakFields(record: RawSessionRecord): SessionRecord {
   return { ...record, ...normalizeBreakState(record) };

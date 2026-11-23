@@ -2,9 +2,10 @@
 // Root component. Owns all global state: auth token, sessions, user profile.
 // When the token changes, sessions and user settings are re-fetched from the API.
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { SessionRecord, RawSessionRecord, normalizeBreakFields } from './store/sessions';
+import { SessionRecord, RawSessionRecord, normalizeBreakFields, recordedBreakMs } from './store/sessions';
 import { UserProfile, DEFAULT_USER, UserTag, SessionCategory } from './store/user';
-import { View, Animated, PanResponder } from 'react-native';
+import { View, Animated, PanResponder, StyleSheet, Alert } from 'react-native';
+import SessionPill, { type LiveSessionInfo } from './components/SessionPill';
 import { StatusBar } from 'expo-status-bar';
 import { hLight } from './utils/haptics';
 import SignUpScreen from './screens/SignUpScreen';
@@ -61,8 +62,20 @@ export type NavProps = {
   refreshTags:      () => void;
   token:            string | null;
   setToken:         (t: string) => void;
+  /** Signs out unconditionally (auth expired, account deleted) — ends a live session. */
   signOut:          () => void;
+  /** User-initiated sign out: refused while a session is running. */
+  requestSignOut:   () => void;
+
+  // A session keeps running (hidden) while the user moves around the app.
+  hasLiveSession:   boolean;
+  /** Call right before navigating away from a session that has ended. */
+  endLiveSession:   () => void;
+  /** The live session reports its timer for the floating pill (on changes only). */
+  reportSession:    (info: LiveSessionInfo | null) => void;
 };
+
+type LiveSession = { key: number; params: NavParams };
 
 export type { SessionRecord, UserProfile, UserTag };
 
@@ -84,6 +97,17 @@ export default function App() {
   const [userTags,   setUserTags]   = useState<UserTag[]>([]);
   const [token,      setTokenState] = useState<string | null>(null);
   const [hydrated,   setHydrated]   = useState(false);
+
+  // The running session. ActiveSessionScreen stays mounted (hidden when another
+  // screen is showing) for as long as this is set, so its timer, breaks, app
+  // blocking, notifications and Live Activity keep running. `params` is a
+  // frozen copy taken when the session started, so later navigation can't
+  // change what the session reads.
+  const [liveSession, setLiveSession] = useState<LiveSession | null>(null);
+  const [liveInfo,    setLiveInfo]    = useState<LiveSessionInfo | null>(null);
+  const liveSessionRef = useRef<LiveSession | null>(null);
+  const endingRef      = useRef(false);   // set by endLiveSession, applied on the next navigate
+  const paramsRef      = useRef<NavParams>({});
 
   // Swipe-from-left-edge to open the drawer. The thin strip on the left claims
   // the gesture only once it's a clear rightward drag (so vertical scrolls and
@@ -150,23 +174,40 @@ export default function App() {
 
   const navigate = useCallback((screen: ScreenName, p?: NavParams) => {
     Animated.timing(fadeAnim, { toValue: 0, duration: 110, useNativeDriver: true }).start(() => {
-      setParams(prev => {
-        // Params merge across navigations, so stale resume keys from an earlier
-        // resumed session would make a brand-new session adopt the old session
-        // id. Drop them on every ActiveSession entry unless explicitly passed.
-        // Same for breakPlan: a plan from an earlier session must never carry
-        // into a new session that has no breaks. It's cleared when setting up a
-        // session and when entering it (CreateSession / NFCScan pass it again).
-        let base = prev;
-        if (screen === 'ActiveSession') {
-          const { resumeId, resumeStartedAt, breakPlan, ...rest } = prev;
-          base = rest;
-        } else if (screen === 'CreateSession') {
-          const { breakPlan, ...rest } = prev;
-          base = rest;
-        }
-        return p ? { ...base, ...p } : base;
-      });
+      // Params merge across navigations, so stale resume keys from an earlier
+      // resumed session would make a brand-new session adopt the old session
+      // id. Drop them on every ActiveSession entry unless explicitly passed.
+      // Same for breakPlan: a plan from an earlier session must never carry
+      // into a new session that has no breaks. It's cleared when setting up a
+      // session and when entering it (CreateSession / NFCScan pass it again).
+      const prev = paramsRef.current;
+      let base = prev;
+      if (screen === 'ActiveSession') {
+        const { resumeId, resumeStartedAt, resumeBreaks, breakPlan, ...rest } = prev;
+        base = rest;
+      } else if (screen === 'CreateSession') {
+        const { breakPlan, ...rest } = prev;
+        base = rest;
+      }
+      const next = p ? { ...base, ...p } : base;
+      paramsRef.current = next;
+      setParams(next);
+
+      // An ended session is dropped as we leave it — that unmounts its screen,
+      // which runs its usual cleanup (shield, alert, Live Activity).
+      if (endingRef.current && screen !== 'ActiveSession') {
+        endingRef.current      = false;
+        liveSessionRef.current = null;
+        setLiveSession(null);
+        setLiveInfo(null);
+      }
+      // Entering ActiveSession with no session running starts one with a frozen
+      // copy of the params; with one running, it just brings it back on screen.
+      if (screen === 'ActiveSession' && !liveSessionRef.current) {
+        const ls = { key: Date.now(), params: next };
+        liveSessionRef.current = ls;
+        setLiveSession(ls);
+      }
       setCurrent(screen);
       setDrawerOpen(false);
       Animated.timing(fadeAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
@@ -181,9 +222,25 @@ export default function App() {
     setUser(DEFAULT_USER);
     setUserTags([]);
     setParams({});
+    paramsRef.current = {};
+    // Forced sign-out ends any running session (unmounting it clears the shield).
+    endingRef.current      = false;
+    liveSessionRef.current = null;
+    setLiveSession(null);
+    setLiveInfo(null);
     setDrawerOpen(false);
     navigate('Login');
   }, [navigate]);
+
+  // From the Sign Out buttons: never sign out from under a running session,
+  // which would leave apps blocked.
+  const requestSignOut = useCallback(() => {
+    if (liveSessionRef.current) {
+      Alert.alert('Session in progress', 'Stop your session before signing out.');
+      return;
+    }
+    signOut();
+  }, [signOut]);
 
   // When a refresh fails mid-session, the client gives up and calls this.
   useEffect(() => {
@@ -203,8 +260,7 @@ export default function App() {
   }, [token]);
 
   // Handle taps on push notifications — navigate to Dashboard for any type,
-  // except while a session is live on screen: leaving ActiveSession unmounts
-  // the timer and orphans the session, so in-session alert taps stay put.
+  // but while a session is running, go back to it (in-session alerts are about it).
   const currentRef = useRef(current);
   useEffect(() => { currentRef.current = current; }, [current]);
   useEffect(() => {
@@ -213,7 +269,10 @@ export default function App() {
       (Notifications as any).addNotificationResponseListener;
 
     const sub = addNotificationResponseListener?.(() => {
-      if (currentRef.current === 'ActiveSession') return;
+      if (liveSessionRef.current) {
+        if (currentRef.current !== 'ActiveSession') navigate('ActiveSession');
+        return;
+      }
       navigate('Dashboard');
     });
     return () => sub?.remove?.();
@@ -236,6 +295,9 @@ export default function App() {
 
     // Wall-clock length of the whole session: Pomodoro alternates focus/break
     // phases (mirrors maxRounds in ActiveSessionScreen), countdown is planned.
+    // Custom Breaks (Countdown with a plan): allow time for every planned break
+    // plus the whole on-demand allowance, so a live session isn't closed early.
+    const breakPlanOf = (s: SessionRecord) => (s.timerMode !== 'POMODORO' ? s.breakPlan : null);
     const wallMsOf = (s: SessionRecord) => {
       const planned = s.plannedDuration ?? s.duration;
       if (s.timerMode === 'POMODORO') {
@@ -243,6 +305,12 @@ export default function App() {
         const brk    = s.pomodoroBreak ?? 5;
         const rounds = Math.max(Math.ceil(planned / work), 1);
         return rounds * (work + brk) * 60_000;
+      }
+      const plan = breakPlanOf(s);
+      if (plan) {
+        const plannedBreakMin = plan.planned.reduce((acc, b) => acc + b.duration, 0);
+        const allowanceMin    = plan.allowance?.maxMinutes ?? 0;
+        return (planned + plannedBreakMin + allowanceMin) * 60_000;
       }
       return planned * 60_000;
     };
@@ -255,6 +323,11 @@ export default function App() {
       const startMs = new Date(s.startedAtISO!).getTime();
       const wallMs  = wallMsOf(s);
       if (Date.now() >= startMs + wallMs) {
+        // Break-plan sessions end when the focus would have, counting only the
+        // breaks actually recorded; everything else ends at the window, as before.
+        const endMs = breakPlanOf(s)
+          ? startMs + (s.plannedDuration ?? s.duration) * 60_000 + recordedBreakMs(s.breaks, Date.now())
+          : startMs + wallMs;
         try {
           await apiFetch(`/sessions/${s.id}/end`, token, {
             method: 'PATCH',
@@ -262,7 +335,7 @@ export default function App() {
               status:            'COMPLETED',
               actualDurationSec: s.plannedDurationSec ?? (s.plannedDuration ?? s.duration) * 60,
               timerState:        { actualDuration: s.plannedDuration ?? s.duration },  // legacy backends
-              endedAt:           new Date(startMs + wallMs).toISOString(),
+              endedAt:           new Date(endMs).toISOString(),
             }),
           });
           ended = true;
@@ -284,10 +357,18 @@ export default function App() {
     }
 
     if (live) {
+      const plan = breakPlanOf(live);
       navigate('ActiveSession', {
         resumeId:        live.id,
         resumeStartedAt: live.startedAtISO!,
+        // ActiveSession reads plannedDuration; `duration` alone made every
+        // resumed session (Countdown and Pomodoro) run as the 45-min default.
+        plannedDuration: String(live.plannedDuration ?? live.duration),
         duration:        String(live.plannedDuration ?? live.duration),
+        ...(plan ? {
+          breakPlan:    JSON.stringify(plan),
+          resumeBreaks: JSON.stringify({ breaks: live.breaks, activeBreak: live.activeBreak }),
+        } : {}),
         pomodoro:        live.timerMode === 'POMODORO' ? 'true' : 'false',
         pomodoroWork:    String(live.pomodoroWork  ?? 25),
         pomodoroBreak:   String(live.pomodoroBreak ?? 5),
@@ -402,6 +483,10 @@ export default function App() {
     token,
     setToken,
     signOut,
+    requestSignOut,
+    hasLiveSession:   !!liveSession,
+    endLiveSession:   () => { endingRef.current = true; },
+    reportSession:    setLiveInfo,
   };
 
   if (!hydrated) return <View style={{ flex: 1, backgroundColor: '#F6F7F1' }} />;
@@ -424,7 +509,16 @@ export default function App() {
         {current === 'Settings'        && <SettingsScreen nav={nav} />}
         {current === 'CreateSession'   && <CreateSessionScreen nav={nav} />}
         {current === 'NFCScan'         && <NFCScreen nav={nav} />}
-        {current === 'ActiveSession'   && <ActiveSessionScreen nav={nav} />}
+        {/* Mounted for the whole session; hidden (still running) on other screens. */}
+        {liveSession && (
+          <View style={[StyleSheet.absoluteFill, { display: current === 'ActiveSession' ? 'flex' : 'none' }]}>
+            <ActiveSessionScreen
+              key={liveSession.key}
+              nav={{ ...nav, params: liveSession.params }}
+              visible={current === 'ActiveSession'}
+            />
+          </View>
+        )}
         {current === 'SessionComplete' && <SessionCompleteScreen nav={nav} />}
         {current === 'History'         && <HistoryScreen nav={nav} />}
         {current === 'Analytics'       && <AnalyticsScreen nav={nav} />}
@@ -440,13 +534,18 @@ export default function App() {
         />
       )}
 
+      {/* Way back to a session running in the background (under the drawer). */}
+      {liveSession && current !== 'ActiveSession' && (
+        <SessionPill info={liveInfo} onPress={() => { hLight(); navigate('ActiveSession'); }} />
+      )}
+
       {!NO_DRAWER.includes(current) && (
         <Drawer
           isOpen={drawerOpen}
           onClose={() => setDrawerOpen(false)}
           currentScreen={current}
           nav={nav}
-          onSignOut={signOut}
+          onSignOut={requestSignOut}
         />
       )}
     </View>
