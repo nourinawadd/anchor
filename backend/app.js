@@ -20,6 +20,8 @@ import './models/Statistics.js';
 import './models/AIInsight.js';
 import './models/RefreshToken.js';
 import './models/CoachConversation.js';
+import './models/StudyTask.js';
+import './models/StudyPlan.js';
 
 import authRoutes      from './routes/auth.js';
 import userRoutes      from './routes/user.js';
@@ -27,6 +29,7 @@ import sessionRoutes   from './routes/sessions.js';
 import analyticsRoutes from './routes/analytics.js';
 import aiRoutes        from './routes/ai.js';
 import landingRoutes   from './routes/landing.js';
+import plannerRoutes   from './routes/planner.js';
 import errorHandler    from './middleware/errorHandler.js';
 import logger          from './utils/logger.js';
 import { getLLMStatus } from './llm/index.js';
@@ -56,6 +59,7 @@ export function createApp() {
   app.use('/api/analytics', analyticsRoutes);
   app.use('/api/ai',        aiRoutes);
   app.use('/api/landing',   landingRoutes);
+  app.use('/api/planner',   plannerRoutes);
 
   // Liveness + readiness: 503 unless the Mongo connection is actually up.
   // `ai` reports the primary LLM provider (fallbacks hide its failures from

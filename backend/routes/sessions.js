@@ -9,6 +9,7 @@ import {
   requireObjectId, requireInt, requireEnum, requireString, requireDateStr, badRequest,
 } from '../middleware/validate.js';
 import { invalidateSuggestion } from '../services/aiSuggestionService.js';
+import { assertStartableBlock, linkSessionToBlock, onPlannedSessionEnded } from '../services/planner/planService.js';
 import { sendPush } from '../utils/push.js';
 import { resolveTimezone, isValidTimezone, localDayOf, diffDays } from '../utils/datetime.js';
 import {
@@ -125,6 +126,10 @@ router.post('/', asyncHandler(async (req, res) => {
   const { categoryId, customName, timerMode, blockedApps, dateStr, nfcTagUid } = req.body;
   const timerConfig = req.body.timerConfig ?? {};
 
+  // Study Planner: a session started from a plan block (optional).
+  const planBlockId = req.body.planBlockId == null ? null : requireObjectId(req.body.planBlockId, { field: 'planBlockId' });
+  if (planBlockId) await assertStartableBlock(req.user._id, planBlockId);
+
   if (dateStr !== undefined) requireDateStr(dateStr);
   const categoryIdStr = requireString(categoryId, { field: 'categoryId' });
   const customNameStr = customName ? requireString(customName, { max: 100, field: 'customName' }) : 'Untitled';
@@ -182,7 +187,10 @@ router.post('/', asyncHandler(async (req, res) => {
     timezone:    sessionTz,
     startedAt,
     nfcTagUid:   nfcTagUid || null,
+    planBlockId,
   });
+
+  if (planBlockId) await linkSessionToBlock(req.user._id, planBlockId, session._id, req.log);
 
   await FocusLog.create({
     sessionId: session._id,
@@ -342,6 +350,7 @@ router.patch('/:id/end', asyncHandler(async (req, res) => {
   }
 
   invalidateSuggestion(req.user._id);
+  await onPlannedSessionEnded(updated, req.log);
 
   res.json({
     session: Session.toFrontendRecord(updated, tz),

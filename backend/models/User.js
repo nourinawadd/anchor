@@ -16,6 +16,28 @@ const CategorySchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 }, { _id: false });
 
+// Study Planner availability (see services/planner). Minutes from local
+// midnight; weekday 0 = Sunday. Edited via /api/planner/settings.
+const StudyWindowSchema = new mongoose.Schema({
+  weekday: { type: Number, required: true, min: 0, max: 6 },
+  start:   { type: Number, required: true, min: 0, max: 1440 },
+  end:     { type: Number, required: true, min: 0, max: 1440 },
+}, { _id: false });
+
+const DEFAULT_STUDY_WINDOWS = () => [0, 1, 2, 3, 4, 5, 6].map(weekday => (
+  weekday === 5 || weekday === 6
+    ? { weekday, start: 600, end: 1320 }    // Fri/Sat 10:00–22:00
+    : { weekday, start: 960, end: 1320 }    // other days 16:00–22:00
+));
+
+const PlannerSettingsSchema = new mongoose.Schema({
+  windows:         { type: [StudyWindowSchema], default: DEFAULT_STUDY_WINDOWS },
+  maxDailyMinutes: { type: Number, default: 240, min: 30, max: 960 },
+  sessionLength:   { type: Number, default: 50,  min: 15, max: 180 },
+  breakBetween:    { type: Number, default: 10,  min: 0,  max: 60 },
+  noStudyAfter:    { type: Number, default: 1380, min: 60, max: 1440 },   // 23:00
+}, { _id: false });
+
 const SettingsSchema = new mongoose.Schema({
   defaultTimerMode: {
     type:    String,
@@ -38,6 +60,8 @@ const SettingsSchema = new mongoose.Schema({
   // IANA timezone (e.g. "Europe/Istanbul"). Drives all server-side
   // hour-of-day / "today" calculations. Defaults to UTC.
   timezone: { type: String, default: 'UTC' },
+
+  planner: { type: PlannerSettingsSchema, default: () => ({}) },
 }, { _id: false });
 
 const UserSchema = new mongoose.Schema({

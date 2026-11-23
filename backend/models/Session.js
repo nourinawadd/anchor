@@ -99,6 +99,8 @@ const SessionSchema = new mongoose.Schema({
   timezone: { type: String, default: null },
   startedAt: { type: Date, default: null },   // UTC
   endedAt:   { type: Date, default: null },   // UTC
+  // Study Planner block this session was started from (StudyPlan.blocks._id).
+  planBlockId: { type: mongoose.Schema.Types.ObjectId, default: null },
 }, {
   timestamps: true,  
 });
@@ -170,6 +172,8 @@ SessionSchema.statics.toFrontendRecord = function (doc, tz = 'UTC') {
     breakMinutes:       Math.round((doc.breakDurationSec ?? 0) / 60),
     breaksTaken:        doc.breaks?.length ?? 0,
     allowanceRemaining: allowanceRemaining(doc),
+
+    planBlockId: doc.planBlockId ? doc.planBlockId.toString() : null,
   };
 };
 

@@ -9,6 +9,9 @@ import Statistics from '../models/Statistics.js';
 import AIInsight from '../models/AIInsight.js';
 import AIUsage from '../models/AIUsage.js';
 import CoachConversation from '../models/CoachConversation.js';
+import StudyTask from '../models/StudyTask.js';
+import StudyPlan from '../models/StudyPlan.js';
+import { onCategoryDeleted } from '../services/planner/planService.js';
 import RefreshToken from '../models/RefreshToken.js';
 import auth from '../middleware/auth.js';
 import asyncHandler from '../middleware/asyncHandler.js';
@@ -121,6 +124,8 @@ router.delete('/me', asyncHandler(async (req, res) => {
     AIInsight.deleteMany({ userId }),
     AIUsage.deleteMany({ userId }),
     CoachConversation.deleteMany({ userId }),
+    StudyTask.deleteMany({ userId }),
+    StudyPlan.deleteMany({ userId }),
     RefreshToken.deleteMany({ userId }),
   ]);
   await User.findByIdAndDelete(userId);
@@ -290,6 +295,9 @@ router.delete('/categories/:categoryId', asyncHandler(async (req, res) => {
   if (!updated || !updated.categories.length) {
     return res.status(404).json({ message: 'Category not found or user has no categories' });
   }
+
+  // Study Planner: the subject is gone, so are its tasks and open blocks.
+  await onCategoryDeleted(req.user._id, categoryId);
 
   res.json({ ok: true });
 }));
