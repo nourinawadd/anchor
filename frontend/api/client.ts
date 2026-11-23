@@ -7,6 +7,7 @@
 // the backend).
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MOCK_BREAKS_ENABLED, mockApiFetch } from './mockBreaks';   // TEMPORARY
 
 const ENV_URL  = process.env.EXPO_PUBLIC_API_URL;
 // Physical iPhone on the same Wi-Fi reaches the backend at this PC's LAN IP.
@@ -102,7 +103,17 @@ function refreshAccessToken(): Promise<string | null> {
 // ─── apiFetch ─────────────────────────────────────────────────────────────────
 // `token` is accepted for backwards-compat with existing call sites, but the
 // in-memory access token (kept fresh by refresh) takes precedence.
-export async function apiFetch<T = unknown>(
+export function apiFetch<T = unknown>(
+  path: string,
+  token: string | null = null,
+  options: RequestInit = {},
+): Promise<T> {
+  // TEMPORARY: Custom Breaks mock (see api/mockBreaks.ts). Remove with that file.
+  if (MOCK_BREAKS_ENABLED) return mockApiFetch<T>(path, token, options, realApiFetch);
+  return realApiFetch<T>(path, token, options);
+}
+
+async function realApiFetch<T = unknown>(
   path: string,
   token: string | null = null,
   options: RequestInit = {},
@@ -127,7 +138,7 @@ export async function apiFetch<T = unknown>(
   // Access token likely expired — refresh once and replay the original request.
   if (res.status === 401 && !_retried && refreshToken) {
     const fresh = await refreshAccessToken();
-    if (fresh) return apiFetch<T>(path, fresh, options, true);
+    if (fresh) return realApiFetch<T>(path, fresh, options, true);
     // Refresh failed: session is unrecoverable. Clear and notify App.
     await clearTokens();
     onAuthExpired?.();

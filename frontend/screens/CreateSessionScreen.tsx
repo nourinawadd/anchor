@@ -14,6 +14,7 @@ import { apiFetch } from '../api/client';
 import { hSelection, hLight, hMedium } from '../utils/haptics';
 import { isPadDevice, useResponsive } from '../utils/responsive';
 import { SessionCategory } from '../store/user';
+import type { BreakPlan } from '../store/sessions';
 import {
   isSupported as screenTimeSupported,
   isNativeReady as screenTimeNativeReady,
@@ -44,6 +45,67 @@ const POMO_PRESETS = [
 
 type PomoPreset = typeof POMO_PRESETS[number];
 type ScreenState = 'category-select' | 'session-create';
+
+// ─── Custom Breaks (Countdown only) ────────────────────────────────────────────
+type PlannedBreak = BreakPlan['planned'][number];
+
+const MAX_PLANNED_BREAKS   = 10;
+const BREAK_LEN_MIN        = 1;
+const BREAK_LEN_MAX        = 60;
+const OD_MAX_BREAKS_LIMIT  = 10;
+const OD_MAX_MINUTES_LIMIT = 180;
+
+/** First problem with the planned breaks for a session of `sessionMin`, or null. */
+function plannedBreaksIssue(list: PlannedBreak[], sessionMin: number): string | null {
+  if (list.length > MAX_PLANNED_BREAKS) return `You can plan at most ${MAX_PLANNED_BREAKS} breaks.`;
+  const seen = new Set<number>();
+  for (const b of list) {
+    if (b.startAfter < 1 || b.startAfter >= sessionMin) {
+      return `A break at ${b.startAfter} min starts after the session ends (${sessionMin} min). Remove it or make the session longer.`;
+    }
+    if (b.duration < BREAK_LEN_MIN || b.duration > BREAK_LEN_MAX) {
+      return `Breaks must be ${BREAK_LEN_MIN}–${BREAK_LEN_MAX} minutes long.`;
+    }
+    if (seen.has(b.startAfter)) return `Two breaks start at ${b.startAfter} min.`;
+    seen.add(b.startAfter);
+  }
+  return null;
+}
+
+/** −/+ stepper styled like the screen's chips. */
+function Stepper({ label, value, min, max, step = 1, unit, onChange }: {
+  label: string; value: number; min: number; max: number; step?: number; unit?: string;
+  onChange: (v: number) => void;
+}) {
+  const atMin = value <= min;
+  const atMax = value >= max;
+  return (
+    <View style={styles.stepperRow}>
+      <Text style={styles.stepperLabel}>{label}</Text>
+      <View style={styles.stepperControls}>
+        <TouchableOpacity
+          style={[styles.stepperBtn, atMin && styles.stepperBtnDisabled]}
+          onPress={() => { hSelection(); onChange(Math.max(min, value - step)); }}
+          disabled={atMin}
+          hitSlop={6}
+          accessibilityLabel={`Decrease ${label}`}
+        >
+          <Ionicons name="remove" size={18} color={colors.ink} />
+        </TouchableOpacity>
+        <Text style={styles.stepperValue}>{value}{unit ? ` ${unit}` : ''}</Text>
+        <TouchableOpacity
+          style={[styles.stepperBtn, atMax && styles.stepperBtnDisabled]}
+          onPress={() => { hSelection(); onChange(Math.min(max, value + step)); }}
+          disabled={atMax}
+          hitSlop={6}
+          accessibilityLabel={`Increase ${label}`}
+        >
+          <Ionicons name="add" size={18} color={colors.ink} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
 
 export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
   const { sidePadding } = useResponsive();
@@ -80,6 +142,14 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
   const [editCategoryName, setEditCategoryName] = useState('');
   const [isSavingCategory, setIsSavingCategory] = useState(false);
   const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
+
+  // Custom Breaks (Countdown only)
+  const [plannedBreaks, setPlannedBreaks] = useState<PlannedBreak[]>([]);
+  const [draftAfter,    setDraftAfter]    = useState(25);
+  const [draftLength,   setDraftLength]   = useState(5);
+  const [odMaxBreaks,   setOdMaxBreaks]   = useState(0);
+  const [odMaxMinutes,  setOdMaxMinutes]  = useState(0);
+  const [unlockApps,    setUnlockApps]    = useState(false);
 
   // Load categories on mount
   useEffect(() => {
@@ -272,6 +342,41 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
 
   const pomoDuration = pomoPreset.work * pomoRounds;
 
+  // ── Custom Breaks ──
+  // A planned break must start before the session ends: startAfter ≤ duration − 1.
+  const maxBreakStart  = Math.max(1, duration - 1);
+  const draftAfterShown = Math.min(Math.max(1, draftAfter), maxBreakStart);
+  const draftTaken     = plannedBreaks.some(b => b.startAfter === draftAfterShown);
+  const canAddBreak    = duration >= 2 && plannedBreaks.length < MAX_PLANNED_BREAKS && !draftTaken;
+  const odEnabled      = odMaxBreaks > 0 && odMaxMinutes > 0;   // either at 0 → off
+
+  const addPlannedBreak = () => {
+    if (!canAddBreak) return;
+    hLight();
+    const next = [...plannedBreaks, { startAfter: draftAfterShown, duration: draftLength }]
+      .sort((a, b) => a.startAfter - b.startAfter);
+    setPlannedBreaks(next);
+    // Suggest the next slot 25 min later (the stepper clamps it to the session).
+    setDraftAfter(draftAfterShown + 25);
+  };
+
+  const removePlannedBreak = (startAfter: number) => {
+    hLight();
+    setPlannedBreaks(prev => prev.filter(b => b.startAfter !== startAfter));
+  };
+
+  // Only Countdown sessions with something set up get a plan; otherwise nothing
+  // is passed and the session behaves exactly as before.
+  const breakPlan: BreakPlan | null =
+    !pomodoro && (plannedBreaks.length > 0 || odEnabled)
+      ? {
+          planned:               plannedBreaks,
+          allowance:             odEnabled ? { maxBreaks: odMaxBreaks, maxMinutes: odMaxMinutes } : null,
+          unlockAppsDuringBreak: unlockApps,
+        }
+      : null;
+  const breakIssue = !pomodoro ? plannedBreaksIssue(plannedBreaks, duration) : null;
+
   const startParams = selectedCategory ? {
     categoryId:    selectedCategory.id,
     customName:    sessionName || 'Untitled',
@@ -281,7 +386,19 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
     pomodoroWork:  String(pomoPreset.work),
     pomodoroBreak: String(pomoPreset.brk),
     blockedApps:   '',
+    ...(breakPlan ? { breakPlan: JSON.stringify(breakPlan) } : {}),
   } : null;
+
+  // Blocks Start while a planned break no longer fits (e.g. the session was shortened).
+  const startTo = (screen: 'ActiveSession' | 'NFCScan') => {
+    if (!startParams) return;
+    if (breakIssue) {
+      Alert.alert('Check your breaks', breakIssue);
+      return;
+    }
+    hMedium();
+    nav.navigate(screen, startParams);
+  };
 
   if (screenState === 'category-select') {
     return (
@@ -511,6 +628,125 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
           <Switch value={pomodoro} onValueChange={v => { hLight(); setPomodoro(v); }} trackColor={{ true: colors.ink }} thumbColor={colors.white} />
         </Card>
 
+        {/* Custom Breaks — Countdown sessions only */}
+        {!pomodoro && (
+          <>
+            <SectionLabel>Breaks</SectionLabel>
+
+            <Card style={styles.breakCard} padding={spacing.lg}>
+              <Text style={styles.toggleTitle}>Planned breaks</Text>
+              <Text style={styles.toggleSub}>Start times count minutes of focus.</Text>
+
+              {plannedBreaks.length === 0 ? (
+                <Text style={styles.breakEmpty}>No planned breaks</Text>
+              ) : (
+                <View style={styles.breakList}>
+                  {plannedBreaks.map((b, i) => {
+                    const pastEnd = b.startAfter >= duration;
+                    return (
+                      <View key={b.startAfter} style={styles.breakRow}>
+                        <View style={styles.breakIndex}>
+                          <Text style={styles.breakIndexText}>{i + 1}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.breakRowText}>
+                            After {b.startAfter} min, {b.duration} min long
+                          </Text>
+                          {pastEnd && (
+                            <Text style={styles.breakRowError}>Starts after the session ends</Text>
+                          )}
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => removePlannedBreak(b.startAfter)}
+                          hitSlop={8}
+                          accessibilityLabel={`Remove break after ${b.startAfter} minutes`}
+                        >
+                          <Ionicons name="close-circle" size={22} color={colors.muted} />
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              {plannedBreaks.length < MAX_PLANNED_BREAKS ? (
+                <View style={styles.breakDraft}>
+                  <Stepper
+                    label="Start after"
+                    value={draftAfterShown}
+                    min={1}
+                    max={maxBreakStart}
+                    step={5}
+                    unit="min"
+                    onChange={setDraftAfter}
+                  />
+                  <Stepper
+                    label="Length"
+                    value={draftLength}
+                    min={BREAK_LEN_MIN}
+                    max={BREAK_LEN_MAX}
+                    unit="min"
+                    onChange={setDraftLength}
+                  />
+                  {draftTaken && (
+                    <Text style={styles.breakRowError}>A break already starts at {draftAfterShown} min.</Text>
+                  )}
+                  {duration < 2 && (
+                    <Text style={styles.breakRowError}>Make the session at least 2 min to add breaks.</Text>
+                  )}
+                  <TouchableOpacity
+                    style={[styles.createBtn, styles.breakAddBtn, !canAddBreak && styles.createBtnDisabled]}
+                    onPress={addPlannedBreak}
+                    disabled={!canAddBreak}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.createBtnText}>Add break</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <Text style={styles.breakEmpty}>Maximum of {MAX_PLANNED_BREAKS} planned breaks reached.</Text>
+              )}
+            </Card>
+
+            <Card style={styles.breakCard} padding={spacing.lg}>
+              <Text style={styles.toggleTitle}>On-demand breaks</Text>
+              <Text style={styles.toggleSub}>
+                {odEnabled
+                  ? `Up to ${odMaxBreaks} break${odMaxBreaks === 1 ? '' : 's'}, ${odMaxMinutes} min in total`
+                  : 'Off — set both to more than 0 to allow them'}
+              </Text>
+              <View style={styles.breakDraft}>
+                <Stepper
+                  label="Max breaks"
+                  value={odMaxBreaks}
+                  min={0}
+                  max={OD_MAX_BREAKS_LIMIT}
+                  onChange={setOdMaxBreaks}
+                />
+                <Stepper
+                  label="Max total"
+                  value={odMaxMinutes}
+                  min={0}
+                  max={OD_MAX_MINUTES_LIMIT}
+                  step={5}
+                  unit="min"
+                  onChange={setOdMaxMinutes}
+                />
+              </View>
+            </Card>
+
+            <Card style={styles.toggleCard} padding={spacing.lg}>
+              <View style={styles.toggleInfo}>
+                <Text style={styles.toggleTitle}>Unlock blocked apps during breaks</Text>
+                <Text style={styles.toggleSub}>
+                  {unlockApps ? 'Blocked apps open up while you’re on a break' : 'Apps stay blocked during breaks'}
+                </Text>
+              </View>
+              <Switch value={unlockApps} onValueChange={v => { hLight(); setUnlockApps(v); }} trackColor={{ true: colors.ink }} thumbColor={colors.white} />
+            </Card>
+          </>
+        )}
+
         {/* Screen Time real blocking (iOS only) */}
         {screenTimeSupported() && (
           <>
@@ -545,7 +781,7 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
         {nav.userTags.length > 0 && !isPadDevice ? (
           <TouchableOpacity
             style={styles.nfcBtn}
-            onPress={() => { hMedium(); startParams && nav.navigate('NFCScan', startParams); }}
+            onPress={() => startTo('NFCScan')}
             activeOpacity={0.8}
           >
             <Text style={styles.nfcBtnText}>Start with NFC</Text>
@@ -554,7 +790,7 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
           <>
             <TouchableOpacity
               style={styles.nfcBtn}
-              onPress={() => { hMedium(); startParams && nav.navigate('ActiveSession', startParams); }}
+              onPress={() => startTo('ActiveSession')}
               activeOpacity={0.8}
             >
               <Text style={styles.nfcBtnText}>Start</Text>
@@ -674,6 +910,35 @@ const styles = StyleSheet.create({
   toggleInfo: { flex: 1 },
   toggleTitle: { fontSize: fontSize.lg - 1, fontWeight: '600', color: colors.ink },
   toggleSub:   { fontSize: fontSize.sm, color: colors.muted, marginTop: 2 },
+
+  // Custom Breaks
+  breakCard:      { marginBottom: spacing.sm },
+  breakEmpty:     { fontSize: fontSize.sm, color: colors.muted, marginTop: spacing.md },
+  breakList:      { marginTop: spacing.md, gap: spacing.sm },
+  breakRow:       {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    backgroundColor: colors.border, borderRadius: radii.md,
+    paddingVertical: spacing.sm, paddingHorizontal: spacing.md,
+  },
+  breakIndex:     {
+    width: 24, height: 24, borderRadius: 12, backgroundColor: colors.ink,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  breakIndexText: { fontSize: fontSize.xs, fontWeight: '700', color: colors.white },
+  breakRowText:   { fontSize: fontSize.md, fontWeight: '600', color: colors.ink },
+  breakRowError:  { fontSize: fontSize.sm, color: colors.danger, marginTop: 2 },
+  breakDraft:     { marginTop: spacing.md, gap: spacing.sm },
+  breakAddBtn:    { marginTop: spacing.xs },
+
+  stepperRow:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  stepperLabel:    { fontSize: fontSize.md, color: colors.inkSoft },
+  stepperControls: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  stepperBtn:      {
+    width: 34, height: 34, borderRadius: radii.full, backgroundColor: colors.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  stepperBtnDisabled: { opacity: 0.4 },
+  stepperValue:    { minWidth: 64, textAlign: 'center', fontSize: fontSize.md, fontWeight: '700', color: colors.ink },
 
   stCard:    {
     flexDirection: 'row', alignItems: 'center',

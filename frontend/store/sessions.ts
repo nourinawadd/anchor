@@ -3,6 +3,22 @@
 // ActiveSessionScreen, and SessionCompleteScreen.
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+// Custom Breaks (Countdown sessions). `startAfter` / `duration` are minutes.
+export type BreakPlan = {
+  planned: { startAfter: number; duration: number }[];
+  allowance: { maxBreaks: number | null; maxMinutes: number | null } | null;
+  unlockAppsDuringBreak: boolean;
+};
+
+export type BreakRecord = {
+  type: 'PLANNED' | 'ON_DEMAND';
+  plannedIndex: number | null;   // index into BreakPlan.planned; null for ON_DEMAND
+  duration: number;              // minutes
+  startedAtISO: string;
+  endedAtISO: string | null;     // null while the break is in progress
+  endedEarly: boolean;
+};
+
 export type SessionRecord = {
   id: string;
   title: string;        // custom name given by user
@@ -25,7 +41,58 @@ export type SessionRecord = {
   pomodoroWork?: number | null;     // minutes per focus phase
   pomodoroBreak?: number | null;    // minutes per break phase
   blockedApps?: string[];
+
+  // Custom Breaks — always present after normalizeBreakFields().
+  breakPlan: BreakPlan | null;
+  breaks: BreakRecord[];
+  activeBreak: BreakRecord | null;
+  breakMinutes: number;          // total minutes spent on breaks
+  breaksTaken: number;
+  allowanceRemaining: { breaks: number | null; minutes: number | null } | null;
 };
+
+export type BreakFieldKey =
+  | 'breakPlan' | 'breaks' | 'activeBreak'
+  | 'breakMinutes' | 'breaksTaken' | 'allowanceRemaining';
+
+/** Just the Custom Breaks part of a session (what the break endpoints return). */
+export type SessionBreakState = Pick<SessionRecord, BreakFieldKey>;
+
+/** Break fields as the API may send them: any of them (and parts of the
+ *  break plan) can be missing. */
+export type RawBreakState =
+  Partial<Pick<SessionRecord, Exclude<BreakFieldKey, 'breakPlan'>>>
+  & { breakPlan?: Partial<BreakPlan> | null };
+
+/** A SessionRecord as the API may send it: break fields can be missing. */
+export type RawSessionRecord = Omit<SessionRecord, BreakFieldKey> & RawBreakState;
+
+function normalizeBreakPlan(plan: Partial<BreakPlan> | null | undefined): BreakPlan | null {
+  if (!plan) return null;
+  return {
+    planned:               Array.isArray(plan.planned) ? plan.planned : [],
+    allowance:             plan.allowance ?? null,
+    // Default to keeping apps blocked — the conservative choice for a focus app.
+    unlockAppsDuringBreak: plan.unlockAppsDuringBreak ?? false,
+  };
+}
+
+/** Safe defaults for any Custom Breaks fields the backend didn't send. */
+export function normalizeBreakState(raw: RawBreakState | null | undefined): SessionBreakState {
+  return {
+    breakPlan:          normalizeBreakPlan(raw?.breakPlan),
+    breaks:             Array.isArray(raw?.breaks) ? raw.breaks : [],
+    activeBreak:        raw?.activeBreak ?? null,
+    breakMinutes:       raw?.breakMinutes ?? 0,
+    breaksTaken:        raw?.breaksTaken ?? 0,
+    allowanceRemaining: raw?.allowanceRemaining ?? null,
+  };
+}
+
+/** Fill in safe defaults for Custom Breaks fields the backend doesn't return yet. */
+export function normalizeBreakFields(record: RawSessionRecord): SessionRecord {
+  return { ...record, ...normalizeBreakState(record) };
+}
 
 export type SessionCategory = {
   id: string;

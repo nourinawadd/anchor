@@ -2,7 +2,7 @@
 // Root component. Owns all global state: auth token, sessions, user profile.
 // When the token changes, sessions and user settings are re-fetched from the API.
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { SessionRecord } from './store/sessions';
+import { SessionRecord, RawSessionRecord, normalizeBreakFields } from './store/sessions';
 import { UserProfile, DEFAULT_USER, UserTag, SessionCategory } from './store/user';
 import { View, Animated, PanResponder } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -154,9 +154,15 @@ export default function App() {
         // Params merge across navigations, so stale resume keys from an earlier
         // resumed session would make a brand-new session adopt the old session
         // id. Drop them on every ActiveSession entry unless explicitly passed.
+        // Same for breakPlan: a plan from an earlier session must never carry
+        // into a new session that has no breaks. It's cleared when setting up a
+        // session and when entering it (CreateSession / NFCScan pass it again).
         let base = prev;
         if (screen === 'ActiveSession') {
-          const { resumeId, resumeStartedAt, ...rest } = prev;
+          const { resumeId, resumeStartedAt, breakPlan, ...rest } = prev;
+          base = rest;
+        } else if (screen === 'CreateSession') {
+          const { breakPlan, ...rest } = prev;
           base = rest;
         }
         return p ? { ...base, ...p } : base;
@@ -215,8 +221,8 @@ export default function App() {
 
   const refreshSessions = useCallback(() => {
     if (!token) return;
-    apiFetch<SessionRecord[]>('/sessions', token)
-      .then(setSessions)
+    apiFetch<RawSessionRecord[]>('/sessions', token)
+      .then(list => setSessions(list.map(normalizeBreakFields)))
       .catch((e: any) => { if (e?.status === 401) signOut(); });
   }, [token, signOut]);
 
@@ -308,8 +314,9 @@ export default function App() {
       return;
     }
 
-    apiFetch<SessionRecord[]>('/sessions', token)
-      .then(list => {
+    apiFetch<RawSessionRecord[]>('/sessions', token)
+      .then(raw => {
+        const list = raw.map(normalizeBreakFields);
         setSessions(list);
         return reconcileOrphans(list);
       })

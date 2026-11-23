@@ -5,7 +5,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
-import { toDateStr, fmtHHMM } from '../store/sessions';
+import {
+  toDateStr, fmtHHMM, normalizeBreakState,
+  type BreakPlan, type RawBreakState, type SessionBreakState,
+} from '../store/sessions';
 import CircularProgress from '../components/CircularProgress';
 import { colors, spacing, radii, fontSize } from '../constants/theme';
 import { apiFetch } from '../api/client';
@@ -42,6 +45,17 @@ function fmt(secs: number) {
 
 type NfcModalPhase = 'scanning' | 'unregistered';
 
+/** The Custom Breaks plan passed by CreateSession as JSON, or null if none/invalid. */
+function parseBreakPlanParam(raw: string | undefined): BreakPlan | null {
+  if (!raw) return null;
+  try {
+    return normalizeBreakState({ breakPlan: JSON.parse(raw) }).breakPlan;
+  } catch {
+    console.warn('[breaks] ignoring malformed breakPlan param');
+    return null;
+  }
+}
+
 export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   const { isWide } = useResponsive();
   const ringSize    = isWide ? 320 : 250;
@@ -62,6 +76,12 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   const resumeStartedAt = resumeId && nav.params.resumeStartedAt
     ? new Date(nav.params.resumeStartedAt)
     : null;
+
+  // Custom Breaks — Countdown only; Pomodoro never sends or reads a plan.
+  const breakPlan = isPomo ? null : parseBreakPlanParam(nav.params.breakPlan);
+  // A new session with a plan waits for the server to accept it before the
+  // timer, shield and Live Activity start; a rejected plan means no session.
+  const awaitsServer = !!breakPlan && !resumeId && !!nav.token;
 
   // Fast-forward the timer to where it would be had the app stayed alive:
   // walk the elapsed wall-clock time through the phase sequence (same scheme
@@ -103,7 +123,15 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   const [phase,        setPhase]        = useState<'focus' | 'break'>(initialState.phase);
   const [round,        setRound]        = useState(initialState.round);
   const [remaining,    setRemaining]    = useState(initialState.remaining);
-  const [running,      setRunning]      = useState(initialState.remaining > 0);
+  const [running,      setRunning]      = useState(initialState.remaining > 0 && !awaitsServer);
+  const [creating,     setCreating]     = useState(awaitsServer);  // waiting on POST /sessions
+  // Break info as last returned by the server (or the mock). Countdown only;
+  // a resumed session starts from the record App already loaded.
+  const [breakState,   setBreakState]   = useState<SessionBreakState | null>(() => {
+    if (isPomo || !resumeId) return null;
+    const rec = nav.sessions.find(s => s.id === resumeId);
+    return rec ? normalizeBreakState(rec) : null;
+  });
   const [nfcModal,     setNfcModal]     = useState(false);
   const [nfcPhase,     setNfcPhase]     = useState<NfcModalPhase>('scanning');
   const [stCount,      setStCount]      = useState(0);   // # apps shielded by Screen Time
@@ -161,7 +189,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
     if (!nav.token) return;
     const now = startedAt.current;
     const nfcTag = nav.params.nfcTag || null;
-    apiFetch<{ id: string }>('/sessions', nav.token, {
+    apiFetch<{ id: string } & RawBreakState>('/sessions', nav.token, {
       method: 'POST',
       body: JSON.stringify({
         categoryId:   nav.params.categoryId || 'uncategorized',
@@ -182,10 +210,32 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
         dateStr:     toDateStr(now),
         startedAt:   now.toISOString(),
         nfcTagUid:   nfcTag,
+        ...(breakPlan ? { breakPlan } : {}),
       }),
     })
-      .then(data => { sessionIdRef.current = data.id; })
-      .catch(console.error);
+      .then(data => {
+        sessionIdRef.current = data.id;
+        if (!isPomo) setBreakState(normalizeBreakState(data));
+        if (awaitsServer) { setCreating(false); setRunning(true); }
+      })
+      .catch((err: any) => {
+        console.error(err);
+        if (!awaitsServer) return;   // unchanged: plan-less sessions carry on offline
+        if (typeof err?.status === 'number') {
+          // The server answered and refused (e.g. an invalid break plan): no
+          // session exists, so don't start one. Leaving unmounts this screen.
+          Alert.alert(
+            "Couldn't start session",
+            err.message || 'The server rejected this session’s break plan.',
+            [{ text: 'OK', onPress: () => nav.navigate('CreateSession') }],
+            { cancelable: false },
+          );
+        } else {
+          // Network failure — same as today: run the session locally.
+          setCreating(false);
+          setRunning(true);
+        }
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -194,7 +244,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   // is a dep so a background catch-up that lands on the same phase value (e.g.
   // focus→break→focus) still re-asserts the shield on foreground.
   useEffect(() => {
-    if (!screenTimeSupported()) return;
+    if (!screenTimeSupported() || creating) return;   // nothing is blocked until the server accepts
     (async () => {
       try {
         if (phase === 'focus') {
@@ -212,7 +262,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
         // Authorization revoked or no selection — silently skip, session continues
       }
     })();
-  }, [phase, round]);
+  }, [phase, round, creating]);
 
   // How many apps the user has shielded (for the "N apps blocked" card).
   useEffect(() => {
@@ -232,8 +282,9 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   // — which covers resumes too, since a resumed session re-mounts this screen —
   // and ended on unmount. The countdown ticks natively off endDateMs; the sync
   // effect below only sends updates at phase/round/pause transitions.
+  // A session awaiting server acceptance starts it once `creating` clears.
   useEffect(() => {
-    if (!liveActivitySupported() || initialState.remaining <= 0) return;
+    if (!liveActivitySupported() || initialState.remaining <= 0 || creating) return;
     startLiveActivity({
       sessionName,
       isPomo,
@@ -246,7 +297,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
     }).catch(() => {});
     return () => { endLiveActivity().catch(() => {}); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [creating]);
 
   const tickAnim = useRef(new Animated.Value(1)).current;
   const pulseTick = () =>
@@ -379,7 +430,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   // completion, which lands here as running=false with remaining 0 — freezes
   // the widget on remainingSecs.
   useEffect(() => {
-    if (!liveActivitySupported()) return;
+    if (!liveActivitySupported() || creating) return;
     updateLiveActivity({
       phase,
       round,
@@ -548,7 +599,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   // Top-right lock indicator: green while focus apps are shielded, otherwise
   // reflects the paused / break state.
   const locked    = running && phase === 'focus';
-  const lockLabel = locked ? 'Locked' : !running ? 'Paused' : 'Break';
+  const lockLabel = creating ? 'Starting…' : locked ? 'Locked' : !running ? 'Paused' : 'Break';
   const lockColor = locked ? colors.success : !running ? colors.mutedLight : colors.amber;
 
   // Meta line under the session name, e.g. "Study · 45 min · Pomodoro 2/3".
@@ -619,7 +670,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
             style={styles.pausePill}
             onPress={() => { hLight(); setRunning(r => !r); }}
             activeOpacity={0.8}
-            disabled={remaining === 0}
+            disabled={remaining === 0 || creating}
           >
             <Ionicons name={running ? 'pause' : 'play'} size={13} color={colors.white} />
             <Text style={styles.pausePillText}>{running ? 'Pause' : 'Resume'}</Text>
@@ -629,6 +680,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
             style={styles.stopPill}
             onPress={() => { hMedium(); hasNfc ? openNfcEndModal() : confirmEnd(); }}
             activeOpacity={0.8}
+            disabled={creating}
           >
             <Ionicons name="stop" size={13} color={colors.danger} />
             <Text style={styles.stopPillText}>Stop</Text>
