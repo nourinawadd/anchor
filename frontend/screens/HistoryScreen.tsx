@@ -96,7 +96,10 @@ function SessionItem({ s, categoryName, onDelete }: { s: SessionRecord; category
       <View style={sc.row}>
         <View style={sc.left}>
           <Text style={sc.title} numberOfLines={1}>{s.title}</Text>
-          <Text style={sc.sub}>{categoryName ? `${categoryName} · ` : ''}{s.duration} min · {s.startTime}–{s.endTime}</Text>
+          <Text style={sc.sub}>
+            {categoryName ? `${categoryName} · ` : ''}{s.duration} min · {s.startTime}–{s.endTime}
+            {s.breaksTaken > 0 ? ` · ${s.breaksTaken} break${s.breaksTaken === 1 ? '' : 's'}` : ''}
+          </Text>
         </View>
         <View style={sc.rightCol}>
           {s.completed && s.focusScore !== null ? (

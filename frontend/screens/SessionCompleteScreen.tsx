@@ -29,13 +29,26 @@ export default function SessionCompleteScreen({ nav }: { nav: NavProps }) {
   const blockedCount = nav.params.blockedCount  ?? '0';
   const distractions = nav.params.distractions  ?? '0';
   const streak       = parseInt(nav.params.streak ?? '1');
+  // Custom Breaks — only sessions that took at least one break show break stats.
+  const breaksTaken  = parseInt(nav.params.breaksTaken  ?? '0') || 0;
+  const breakMins    = parseInt(nav.params.breakMinutes ?? '0') || 0;
+  const hadBreaks    = breaksTaken > 0;
 
-  const stats: { value: string; label: string }[] = [
-    { value: formatDuration(actualMins), label: 'Duration'     },
-    { value: focusScore,                 label: 'Focus Score'  },
-    { value: blockedCount,               label: 'Apps Blocked' },
-    { value: distractions,               label: 'Distractions' },
-  ];
+  const stats: { value: string; label: string }[] = hadBreaks
+    ? [
+        { value: formatDuration(actualMins), label: 'Focus Time'   },
+        { value: formatDuration(breakMins),  label: 'Break Time'   },
+        { value: String(breaksTaken),        label: 'Breaks Taken' },
+        { value: focusScore,                 label: 'Focus Score'  },
+        { value: blockedCount,               label: 'Apps Blocked' },
+        { value: distractions,               label: 'Distractions' },
+      ]
+    : [
+        { value: formatDuration(actualMins), label: 'Duration'     },
+        { value: focusScore,                 label: 'Focus Score'  },
+        { value: blockedCount,               label: 'Apps Blocked' },
+        { value: distractions,               label: 'Distractions' },
+      ];
 
   // ── Entrance animations ──────────────────────────────────────────────────────
   const iconScale     = useRef(new Animated.Value(0)).current;
@@ -75,7 +88,7 @@ export default function SessionCompleteScreen({ nav }: { nav: NavProps }) {
         <Text style={styles.title}>Session Complete</Text>
         <Text style={styles.subtitle}>Great work! Here's your summary.</Text>
 
-        {/* ── 2×2 Stats Grid ────────────────────────────────────────────────── */}
+        {/* ── Stats grid: 2×2, or 2×3 when breaks were taken ───────────────── */}
         <View style={styles.grid}>
           {stats.map(({ value, label }) => (
             <Card key={label} padding={0} style={styles.statCard}>
