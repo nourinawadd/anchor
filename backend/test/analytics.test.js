@@ -33,10 +33,14 @@ async function sessionOn(token, dateStr, { status = 'COMPLETED', actualDuration 
       dateStr, startedAt: `${dateStr}T12:00:00.000Z`,
     });
   expect(created.status).toBe(201);
+  // End explicitly at start + duration. Ending "now" fails with 400 whenever
+  // the suite runs before 12:00 UTC: today's noon start is then in the future,
+  // so "now" would be before the session start.
+  const endedAt = new Date(Date.parse(`${dateStr}T12:00:00.000Z`) + actualDuration * 60_000).toISOString();
   const ended = await request(app)
     .patch(`/api/sessions/${created.body.id}/end`)
     .set('Authorization', `Bearer ${token}`)
-    .send({ status, timerState: { actualDuration } });
+    .send({ status, timerState: { actualDuration }, endedAt });
   expect(ended.status).toBe(200);
   return ended.body;
 }

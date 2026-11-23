@@ -262,7 +262,10 @@ describe('coach turn: answer validation', () => {
     expect(res.body.reply).toMatchObject({ status: 'unavailable', sections: [] });
     expect(fetchMock).toHaveBeenCalledTimes(2);                  // bounded: original + one retry
     const stored = await CoachConversation.findById(id).lean();
-    expect(JSON.stringify(stored)).not.toContain('52');
+    // Check only what was stored as message text: the whole document also
+    // holds random ObjectIds, which contain "52" by chance (flaky in CI).
+    const storedText = stored.messages.map(m => ({ content: m.content, sections: m.sections, dataGaps: m.dataGaps, notice: m.notice }));
+    expect(JSON.stringify(storedText)).not.toContain('52');
   });
 
   it('handles missing data without inventing values', async () => {
